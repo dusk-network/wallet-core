@@ -13,9 +13,6 @@
 #[macro_use]
 extern crate alloc;
 
-#[cfg(feature = "test-utils")]
-pub mod test_utils;
-
 #[cfg(target_family = "wasm")]
 mod ffi;
 
@@ -30,13 +27,11 @@ use dusk_poseidon::tree::PoseidonBranch;
 use phoenix_core::Note;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
+use rusk_abi::POSEIDON_TREE_DEPTH;
 use sha2::{Digest, Sha256};
 
 pub use imp::*;
 pub use tx::{Transaction, UnprovenTransaction, UnprovenTransactionInput};
-
-/// The depth of an branch.
-pub const POSEIDON_DEPTH: usize = 17;
 
 /// Stores the cryptographic material necessary to derive cryptographic keys.
 pub trait Store {
@@ -94,7 +89,7 @@ pub trait NodeClient {
     fn fetch_opening(
         &self,
         note: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_DEPTH>, Self::Error>;
+    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error>;
 
     /// Requests that a node prove the given transaction.
     fn request_proof(

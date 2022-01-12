@@ -4,14 +4,12 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
-use crate::{NodeClient, POSEIDON_DEPTH};
+use crate::NodeClient;
 
 use alloc::vec::Vec;
 use core::mem;
 
-use blake2b_simd::Params;
 use canonical::{Canon, Sink, Source};
-use dusk_abi::ContractId;
 use dusk_bytes::{
     DeserializableSlice, Error as BytesError, Serializable, Write,
 };
@@ -24,6 +22,9 @@ use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Proof as SchnorrSig;
 use phoenix_core::{Crossover, Fee, Note};
 use rand_core::{CryptoRng, RngCore};
+use rusk_abi::hash::Hasher;
+use rusk_abi::ContractId;
+use rusk_abi::POSEIDON_TREE_DEPTH;
 
 const CONTRACT_ID_SIZE: usize = mem::size_of::<ContractId>();
 
@@ -242,7 +243,7 @@ const NOTE_NUM_HASH_INPUTS: usize = 12;
 const FEE_NUM_HASH_INPUTS: usize = 4;
 const CROSSOVER_NUM_HASH_INPUTS: usize = 3 + PoseidonCipher::cipher_size();
 const ANCHOR_NUM_HASH_INPUTS: usize = 1;
-const CALL_NUM_HASH_INPUTS: usize = 1;
+const CALL_NUM_HASH_INPUTS: usize = 2;
 
 impl TransactionSkeleton {
     pub(crate) fn hash(&self) -> BlsScalar {
@@ -273,15 +274,8 @@ impl TransactionSkeleton {
         hash_inputs.append(&mut self.crossover.to_hash_inputs().to_vec());
 
         if let Some((cid, cdata)) = &self.call {
-            let mut state = Params::new().hash_length(64).to_state();
-
-            state.update(cid.as_bytes());
-            state.update(cdata);
-
-            let mut buf = [0u8; 64];
-            buf.copy_from_slice(state.finalize().as_ref());
-
-            hash_inputs.push(BlsScalar::from_bytes_wide(&buf));
+            hash_inputs.push(Hasher::digest(cid.as_bytes()));
+            hash_inputs.push(Hasher::digest(cdata));
         }
 
         hash_inputs
@@ -292,7 +286,7 @@ impl TransactionSkeleton {
 #[derive(Debug, Clone)]
 pub struct UnprovenTransactionInput {
     nullifier: BlsScalar,
-    opening: PoseidonBranch<POSEIDON_DEPTH>,
+    opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
     note: Note,
     value: u64,
     blinder: JubJubScalar,
@@ -307,7 +301,7 @@ impl UnprovenTransactionInput {
         note: Note,
         value: u64,
         blinder: JubJubScalar,
-        opening: PoseidonBranch<POSEIDON_DEPTH>,
+        opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
         tx_hash: BlsScalar,
     ) -> Self {
         let nullifier = note.gen_nullifier(ssk);
@@ -334,7 +328,7 @@ impl UnprovenTransactionInput {
         // TODO Magic number for the buffer size here.
         // Should be corrected once dusk-poseidon implements `Serializable` for
         // `PoseidonBranch`.
-        let mut opening_bytes = [0; opening_buf_size(POSEIDON_DEPTH)];
+        let mut opening_bytes = [0; opening_buf_size(POSEIDON_TREE_DEPTH)];
         let mut sink = Sink::new(&mut opening_bytes[..]);
         self.opening.encode(&mut sink);
 
@@ -392,7 +386,7 @@ impl UnprovenTransactionInput {
     }
 
     /// Returns the opening of the input.
-    pub fn opening(&self) -> &PoseidonBranch<POSEIDON_DEPTH> {
+    pub fn opening(&self) -> &PoseidonBranch<POSEIDON_TREE_DEPTH> {
         &self.opening
     }
 

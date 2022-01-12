@@ -6,15 +6,16 @@
 
 //! Wallet library tests.
 
+mod mock;
+
+use mock::{mock_wallet, TestNodeClient};
+
 use dusk_pki::ViewKey;
 use dusk_plonk::prelude::{BlsScalar, Proof};
 use dusk_poseidon::tree::PoseidonBranch;
-use dusk_wallet_core::test_utils::mock_wallet;
-use dusk_wallet_core::{
-    test_utils::TestNodeClient, NodeClient, Transaction, UnprovenTransaction,
-    POSEIDON_DEPTH,
-};
+use dusk_wallet_core::{NodeClient, Transaction, UnprovenTransaction};
 use phoenix_core::Note;
+use rusk_abi::POSEIDON_TREE_DEPTH;
 
 #[derive(Debug)]
 struct SerdeNodeClient {
@@ -39,7 +40,7 @@ impl NodeClient for SerdeNodeClient {
     fn fetch_opening(
         &self,
         note: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_DEPTH>, Self::Error> {
+    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error> {
         self.node.fetch_opening(note)
     }
 

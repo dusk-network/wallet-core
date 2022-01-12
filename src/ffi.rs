@@ -21,8 +21,9 @@ use rand_core::{
     impls::{next_u32_via_fill, next_u64_via_fill},
     CryptoRng, RngCore,
 };
+use rusk_abi::POSEIDON_TREE_DEPTH;
 
-use crate::{tx::UnprovenTransaction, POSEIDON_DEPTH};
+use crate::tx::UnprovenTransaction;
 use crate::{Error, NodeClient, Store, Wallet};
 
 extern "C" {
@@ -240,7 +241,7 @@ impl NodeClient for FfiNodeClient {
     fn fetch_opening(
         &self,
         note: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_DEPTH>, Self::Error> {
+    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error> {
         let mut opening_buf = [0u8; OPENING_BUF_SIZE];
 
         let mut opening_len = 0;
