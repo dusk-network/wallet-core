@@ -57,10 +57,7 @@ extern "C" {
     fn fetch_anchor(anchor: *mut [u8; BlsScalar::SIZE]) -> u8;
 
     /// Request the node to prove the given unproven transaction.
-    fn compute_proof_and_propagate(
-        utx: *const u8,
-        utx_len: u32,
-    ) -> u8;
+    fn compute_proof_and_propagate(utx: *const u8, utx_len: u32) -> u8;
 }
 
 macro_rules! unwrap_or_bail {
@@ -108,7 +105,7 @@ pub unsafe extern "C" fn create_transfer_tx(
         ref_id.copied().unwrap_or_else(|| (&mut FfiRng).next_u64()),
     );
 
-    let tx = unwrap_or_bail!(WALLET.create_transfer_tx(
+    unwrap_or_bail!(WALLET.create_transfer_tx(
         &mut FfiRng,
         sender_index,
         &refund,
@@ -118,10 +115,6 @@ pub unsafe extern "C" fn create_transfer_tx(
         gas_limit,
         ref_id
     ));
-
-    let tx_bytes = unwrap_or_bail!(tx.to_bytes());
-    ptr::copy_nonoverlapping(&tx_bytes[0], tx_buf, tx_bytes.len());
-    *tx_len = tx_bytes.len() as u32;
 
     0
 }
@@ -277,7 +270,7 @@ impl NodeClient for FfiNodeClient {
             if r != 0 {
                 return Err(r);
             }
-        } 
+        }
 
         Ok(())
     }

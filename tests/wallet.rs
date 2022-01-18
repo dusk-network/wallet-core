@@ -11,11 +11,9 @@ mod mock;
 use mock::{mock_wallet, TestNodeClient};
 
 use dusk_pki::ViewKey;
-use dusk_plonk::prelude::{BlsScalar};
+use dusk_plonk::prelude::BlsScalar;
 use dusk_poseidon::tree::PoseidonBranch;
-use dusk_wallet_core::{
-    NodeClient, UnprovenTransaction, POSEIDON_TREE_DEPTH,
-};
+use dusk_wallet_core::{NodeClient, UnprovenTransaction, POSEIDON_TREE_DEPTH};
 use phoenix_core::Note;
 
 #[derive(Debug)]
@@ -90,7 +88,8 @@ fn serde() {
     let recv_psk = wallet.public_spend_key(1).unwrap();
 
     let ref_id = BlsScalar::random(&mut rng);
-    wallet.create_transfer_tx(
+    wallet
+        .create_transfer_tx(
             &mut rng, 0, &send_psk, &recv_psk, 100, 100, 1, ref_id,
         )
         .expect("Transaction creation to be successful");
@@ -106,7 +105,8 @@ fn create_transfer_tx() {
     let recv_psk = wallet.public_spend_key(1).unwrap();
 
     let ref_id = BlsScalar::random(&mut rng);
-    wallet.create_transfer_tx(
+    wallet
+        .create_transfer_tx(
             &mut rng, 0, &send_psk, &recv_psk, 100, 100, 1, ref_id,
         )
         .expect("Transaction creation to be successful");
