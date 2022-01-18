@@ -16,7 +16,6 @@ use canonical::{Canon, Source};
 use dusk_bytes::{DeserializableSlice, Serializable};
 use dusk_jubjub::BlsScalar;
 use dusk_pki::{PublicSpendKey, ViewKey};
-use dusk_plonk::prelude::Proof;
 use dusk_poseidon::tree::PoseidonBranch;
 use phoenix_core::Note;
 use rand_core::{
@@ -95,8 +94,6 @@ pub unsafe extern "C" fn create_transfer_tx(
     gas_limit: u64,
     gas_price: u64,
     ref_id: Option<&u64>,
-    tx_buf: *mut u8,
-    tx_len: *mut u32,
 ) -> u8 {
     let refund = unwrap_or_bail!(PublicSpendKey::from_bytes(&*refund));
     let receiver = unwrap_or_bail!(PublicSpendKey::from_bytes(&*receiver));
