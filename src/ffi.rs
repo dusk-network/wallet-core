@@ -57,10 +57,9 @@ extern "C" {
     fn fetch_anchor(anchor: *mut [u8; BlsScalar::SIZE]) -> u8;
 
     /// Request the node to prove the given unproven transaction.
-    fn request_proof(
+    fn compute_proof_and_propagate(
         utx: *const u8,
         utx_len: u32,
-        proof: *mut [u8; Proof::SIZE],
     ) -> u8;
 }
 
@@ -262,29 +261,25 @@ impl NodeClient for FfiNodeClient {
         Ok(branch)
     }
 
-    fn request_proof(
+    fn compute_proof_and_propagate(
         &self,
         utx: &UnprovenTransaction,
-    ) -> Result<Proof, Self::Error> {
+    ) -> Result<(), Self::Error> {
         let utx_bytes = utx
             .to_bytes()
             .map_err(Error::<FfiStore, FfiNodeClient>::from)?;
-        let mut proof_buf = [0; Proof::SIZE];
 
         unsafe {
-            let r = request_proof(
+            let r = compute_proof_and_propagate(
                 &utx_bytes[0],
                 utx_bytes.len() as u32,
-                &mut proof_buf,
             );
             if r != 0 {
                 return Err(r);
             }
-        }
+        } 
 
-        let utx = Proof::from_bytes(&proof_buf)
-            .map_err(Error::<FfiStore, FfiNodeClient>::from)?;
-        Ok(utx)
+        Ok(())
     }
 }
 
