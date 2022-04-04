@@ -1,0 +1,7 @@
+target/
+bin/
+lib/binaryen/*
+node_modules
+*.md
+*.yml
+package-lock.json
