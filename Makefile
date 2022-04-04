@@ -1,4 +1,4 @@
-WASMOPT?=./lib/binaryen/bin/wasm-opt
+WASM_OPT?=./lib/binaryen/bin/wasm-opt
 
 help: ## Display this help screen
 	@grep -h \
@@ -6,7 +6,8 @@ help: ## Display this help screen
 		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install the toolchain
-	make installBinaryen
+	make installBinaryen | \
+	npm install
 
 installBinaryen:
 	make installBinaryen`(uname -s)` \
@@ -27,7 +28,7 @@ wasm: ## Generate WASM
 		-- -C link-args=-s
 
 asyncify: ## Generate WASM with asyncify
-	$(WASMOPT) --asyncify -O4 \
+	$(WASM_OPT) --asyncify -O4 \
 		--pass-arg asyncify-import@env.compute_proof_and_propagate \
 		--pass-arg asyncify-import@env.request_stct_proof \
 		--pass-arg asyncify-import@env.request_wfct_proof \
@@ -40,8 +41,7 @@ asyncify: ## Generate WASM with asyncify
 		target/wasm32-unknown-unknown/release/dusk_wallet_core.wasm \
 		-o mod.wasm
 
-all: ## Build it all
+all: ## Install, build and test
 	make install
 	make wasm
 	make asyncify
-
