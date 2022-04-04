@@ -6,6 +6,12 @@
 
 A library for generating and dealing with transactions.
 
+## Install
+
+```shell
+make all
+```
+
 ## Build
 
 To build and test the crate:
@@ -18,5 +24,11 @@ cargo t --all-features
 To build the WASM module:
 
 ```shell
-cargo b --release --target wasm32-unknown-unknown
+make build
+```
+
+To test the WASM module:
+
+```shell
+make test
 ```

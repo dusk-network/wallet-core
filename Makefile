@@ -41,6 +41,12 @@ asyncify: ## Generate WASM with asyncify
 		target/wasm32-unknown-unknown/release/dusk_wallet_core.wasm \
 		-o mod.wasm
 
+build: ## Build the WASM
+	@cargo b --release --target wasm32-unknown-unknown
+
+test: ## Run the tests
+	@npm run test
+
 all: ## Install, build and test
 	make install
 	make wasm
