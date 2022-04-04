@@ -1,4 +1,6 @@
 target/
+bin/binaryen-*.tar.gz
+lib/binaryen/*
 Cargo.lock
 **/*.rs.bk
 
