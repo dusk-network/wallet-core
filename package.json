@@ -1,9 +1,18 @@
 {
   "name": "@dusk-network/wallet-core",
   "version": "0.0.1",
-  "files": ["mod.wasm"],
+  "files": [
+    "mod.wasm"
+  ],
+  "type": "module",
+  "scripts": {
+    "test": "node tests/index.js"
+  },
   "repository": "git://github.com/dusk-network/wallet-core",
   "publishConfig": {
     "@dusk-network:registry": "https://npm.pkg.github.com"
+  },
+  "devDependencies": {
+    "base58-js": "^1.0.0"
   }
 }
