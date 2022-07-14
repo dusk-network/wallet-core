@@ -1,0 +1,24 @@
+{
+  "name": "@dusk/wallet-core",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.mjs",
+  "author": "zer0 <matteo@dusk.network>",
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dusk-network/wallet-core"
+  },
+  "scripts": {
+    "test": "tape tests/*.mjs"
+  },
+  "keywords": [
+    "cryptocurrency",
+    "wasm",
+    "crypto",
+    "wallet"
+  ],
+  "devDependencies": {
+    "tape": "^5.5.3"
+  }
+}

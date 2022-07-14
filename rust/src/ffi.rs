@@ -33,7 +33,15 @@ use crate::{
     Transaction, Wallet, POSEIDON_TREE_DEPTH,
 };
 
+fn signal(msg: &str) {
+    let bytes = msg.as_bytes();
+    let len = bytes.len() as i32;
+    unsafe { sig(&bytes[0], len) }
+}
+
 extern "C" {
+    fn sig(msg: &u8, len: i32);
+
     /// Retrieves the seed from the store.
     fn get_seed(seed: *mut [u8; 64]) -> u8;
 
@@ -316,6 +324,7 @@ impl StateClient for FfiStateClient {
 
         let notes_buf = unsafe {
             let r = fetch_notes(&vk.to_bytes(), &mut notes_ptr, &mut notes_len);
+
             if r != 0 {
                 return Err(r);
             }
