@@ -6,13 +6,13 @@
 
 //! The foreign function interface for the wallet.
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use core::mem;
 use core::num::NonZeroU32;
 use core::ptr;
 
-use canonical::{Canon, Source};
 use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Write;
 use dusk_bytes::{DeserializableSlice, Serializable};
@@ -26,7 +26,7 @@ use rand_core::{
     impls::{next_u32_via_fill, next_u64_via_fill},
     CryptoRng, RngCore,
 };
-use rusk_abi::ContractId;
+use rusk_abi::ModuleId;
 
 use crate::tx::UnprovenTransaction;
 use crate::{
@@ -59,8 +59,7 @@ extern "C" {
     /// Queries the node to find the opening for a specific note.
     fn fetch_opening(
         note: *const [u8; Note::SIZE],
-        opening: *mut u8,
-        opening_len: *mut u32,
+        opening: *mut [u8; PoseidonBranch::<POSEIDON_TREE_DEPTH>::SIZE],
     ) -> u8;
 
     /// Asks the node to find the nullifiers that are already in the state and
@@ -155,6 +154,8 @@ pub unsafe extern "C" fn public_spend_key(
 #[no_mangle]
 pub unsafe extern "C" fn execute(
     contract_id: *const [u8; 32],
+    call_name_ptr: *mut u8,
+    call_name_len: *const u32,
     call_data_ptr: *mut u8,
     call_data_len: *const u32,
     sender_index: *const u64,
@@ -162,11 +163,18 @@ pub unsafe extern "C" fn execute(
     gas_limit: *const u64,
     gas_price: *const u64,
 ) -> u8 {
-    let contract_id = ContractId::from(*contract_id);
+    let contract_id = ModuleId::from_bytes(*contract_id);
 
-    // SAFETY: the buffer is expected to have been allocated with the
+    // SAFETY: these buffers are expected to have been allocated with the
     // correct size. If this is not the case problems with the allocator
     // *may* happen.
+    let call_name = Vec::from_raw_parts(
+        call_name_ptr,
+        call_name_len as usize,
+        call_name_len as usize,
+    );
+    let call_name = unwrap_or_bail!(String::from_utf8(call_name));
+
     let call_data = Vec::from_raw_parts(
         call_data_ptr,
         call_data_len as usize,
@@ -178,6 +186,7 @@ pub unsafe extern "C" fn execute(
     unwrap_or_bail!(WALLET.execute(
         &mut FfiRng,
         contract_id,
+        call_name,
         call_data,
         *sender_index,
         &refund,
@@ -332,9 +341,6 @@ impl Store for FfiStore {
     }
 }
 
-// 512 KB for a buffer.
-const OPENING_BUF_SIZE: usize = 0x10000;
-
 const STCT_INPUT_SIZE: usize = Fee::SIZE
     + Crossover::SIZE
     + u64::SIZE
@@ -460,20 +466,18 @@ impl StateClient for FfiStateClient {
         &self,
         note: &Note,
     ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error> {
-        let mut opening_buf = [0u8; OPENING_BUF_SIZE];
-
-        let mut opening_len = 0;
+        let mut opening_buf =
+            [0u8; PoseidonBranch::<POSEIDON_TREE_DEPTH>::SIZE];
 
         let note = note.to_bytes();
         unsafe {
-            let r = fetch_opening(&note, &mut opening_buf[0], &mut opening_len);
+            let r = fetch_opening(&note, &mut opening_buf);
             if r != 0 {
                 return Err(r);
             }
         }
 
-        let mut source = Source::new(&opening_buf[..opening_len as usize]);
-        let branch = PoseidonBranch::decode(&mut source).map_err(
+        let branch = PoseidonBranch::from_slice(&opening_buf).map_err(
             Error::<FfiStore, FfiStateClient, FfiProverClient>::from,
         )?;
 
@@ -666,11 +670,12 @@ impl<S: Store, SC: StateClient, PC: ProverClient> From<Error<S, SC, PC>>
             Error::Prover(_) => 251,
             Error::NotEnoughBalance => 250,
             Error::NoteCombinationProblem => 249,
-            Error::Canon(_) => 248,
+            Error::Rkyv(_) => 248,
             Error::Phoenix(_) => 247,
             Error::AlreadyStaked { .. } => 246,
             Error::NotStaked { .. } => 245,
             Error::NoReward { .. } => 244,
+            Error::Utf8(_) => 243,
         }
     }
 }
