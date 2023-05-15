@@ -10,7 +10,7 @@ use canonical::{Canon, Sink, Source};
 use canonical_derive::Canon;
 use dusk_bls12_381_sign::PublicKey;
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_pki::{PublicSpendKey, ViewKey};
+use dusk_pki::{PublicSpendKey, SecretSpendKey};
 use dusk_plonk::prelude::Proof;
 use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
@@ -151,7 +151,7 @@ impl StateClient for TestStateClient {
 
     fn fetch_notes(
         &self,
-        _: &ViewKey,
+        _: &SecretSpendKey,
     ) -> Result<Vec<EnrichedNote>, Self::Error> {
         Ok(self.notes.clone())
     }

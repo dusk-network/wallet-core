@@ -17,7 +17,7 @@ use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Write;
 use dusk_bytes::{DeserializableSlice, Serializable};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_pki::{PublicSpendKey, ViewKey};
+use dusk_pki::{PublicSpendKey, SecretSpendKey};
 use dusk_plonk::prelude::Proof;
 use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
@@ -51,7 +51,7 @@ extern "C" {
     ///
     /// E.g: note1, block_height, note2, block_height, etc...
     fn fetch_notes(
-        vk: *const [u8; ViewKey::SIZE],
+        vk: *const [u8; SecretSpendKey::SIZE],
         notes: *mut *mut u8,
         notes_len: *mut u32,
     ) -> u8;
@@ -352,7 +352,7 @@ impl StateClient for FfiStateClient {
 
     fn fetch_notes(
         &self,
-        vk: &ViewKey,
+        vk: &SecretSpendKey,
     ) -> Result<Vec<EnrichedNote>, Self::Error> {
         let mut notes_ptr = ptr::null_mut();
         let mut notes_len = 0;

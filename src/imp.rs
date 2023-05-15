@@ -199,10 +199,8 @@ where
         &self,
         ssk: &SecretSpendKey,
     ) -> Result<Vec<Note>, Error<S, SC, PC>> {
-        let vk = ssk.view_key();
-
         let notes =
-            self.state.fetch_notes(&vk).map_err(Error::from_state_err)?;
+            self.state.fetch_notes(ssk).map_err(Error::from_state_err)?;
 
         let nullifiers: Vec<_> =
             notes.iter().map(|(n, _)| n.gen_nullifier(ssk)).collect();

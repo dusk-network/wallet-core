@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 use dusk_bls12_381_sign::{PublicKey, SecretKey};
 use dusk_bytes::{DeserializableSlice, Serializable, Write};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_pki::{SecretSpendKey, ViewKey};
+use dusk_pki::SecretSpendKey;
 use dusk_plonk::proof_system::Proof;
 use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
@@ -151,7 +151,7 @@ pub trait StateClient {
     /// Find notes for a view key.
     fn fetch_notes(
         &self,
-        vk: &ViewKey,
+        vk: &SecretSpendKey,
     ) -> Result<Vec<EnrichedNote>, Self::Error>;
 
     /// Fetch the current anchor of the state.
