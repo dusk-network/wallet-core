@@ -30,7 +30,7 @@ use rkyv::ser::serializers::{
     SharedSerializeMapError,
 };
 use rkyv::Serialize;
-use rusk_abi::ModuleId;
+use rusk_abi::ContractId;
 
 const MAX_INPUT_NOTES: usize = 4;
 
@@ -307,7 +307,7 @@ where
     pub fn execute<Rng, C>(
         &self,
         rng: &mut Rng,
-        module_id: ModuleId,
+        contract_id: ContractId,
         call_name: String,
         call_data: C,
         sender_index: u64,
@@ -334,7 +334,7 @@ where
         let fee = Fee::new(rng, gas_limit, gas_price, refund);
 
         let call_data = rkyv::to_bytes(&call_data)?.to_vec();
-        let call = (module_id, call_name, call_data);
+        let call = (contract_id, call_name, call_data);
 
         let utx = UnprovenTransaction::new(
             rng,
@@ -448,12 +448,13 @@ where
         fee.gas_limit = gas_limit;
         fee.gas_price = gas_price;
 
-        let module_id = rusk_abi::stake_module();
-        let address = rusk_abi::module_to_scalar(&module_id);
+        let contract_id = rusk_abi::stake_module();
+        let address = rusk_abi::module_to_scalar(&contract_id);
 
-        let module_id = rusk_abi::module_to_scalar(&rusk_abi::stake_module());
+        let contract_id = rusk_abi::module_to_scalar(&rusk_abi::stake_module());
 
-        let stct_message = stct_signature_message(&crossover, value, module_id);
+        let stct_message =
+            stct_signature_message(&crossover, value, contract_id);
         let stct_message = rusk_abi::poseidon_hash(stct_message.to_vec());
 
         let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
@@ -663,8 +664,8 @@ where
         };
         let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&withdraw)?.to_vec();
 
-        let module_id = rusk_abi::stake_module();
-        let call = (module_id, String::from(TX_WITHDRAW), call_data);
+        let contract_id = rusk_abi::stake_module();
+        let call = (contract_id, String::from(TX_WITHDRAW), call_data);
 
         let utx = UnprovenTransaction::new(
             rng,
@@ -739,8 +740,8 @@ where
         };
         let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&allow)?.to_vec();
 
-        let module_id = rusk_abi::stake_module();
-        let call = (module_id, String::from(TX_ADD_ALLOWLIST), call_data);
+        let contract_id = rusk_abi::stake_module();
+        let call = (contract_id, String::from(TX_ADD_ALLOWLIST), call_data);
 
         let utx = UnprovenTransaction::new(
             rng,

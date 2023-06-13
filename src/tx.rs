@@ -21,7 +21,7 @@ use phoenix_core::transaction::Transaction;
 use phoenix_core::{Crossover, Fee, Note};
 use rand_core::{CryptoRng, RngCore};
 use rusk_abi::hash::Hasher;
-use rusk_abi::{ModuleId, MODULE_ID_BYTES, POSEIDON_TREE_DEPTH};
+use rusk_abi::{ContractId, MODULE_ID_BYTES, POSEIDON_TREE_DEPTH};
 
 /// An input to a transaction that is yet to be proven.
 #[derive(Debug, Clone)]
@@ -156,7 +156,7 @@ pub struct UnprovenTransaction {
     anchor: BlsScalar,
     fee: Fee,
     crossover: Option<(Crossover, u64, JubJubScalar)>,
-    call: Option<(ModuleId, String, Vec<u8>)>,
+    call: Option<(ContractId, String, Vec<u8>)>,
 }
 
 impl UnprovenTransaction {
@@ -170,7 +170,7 @@ impl UnprovenTransaction {
         outputs: Vec<(Note, u64, JubJubScalar)>,
         fee: Fee,
         crossover: Option<(Crossover, u64, JubJubScalar)>,
-        call: Option<(ModuleId, String, Vec<u8>)>,
+        call: Option<(ContractId, String, Vec<u8>)>,
     ) -> Result<Self, SC::Error> {
         let nullifiers: Vec<BlsScalar> = inputs
             .iter()
@@ -404,7 +404,7 @@ impl UnprovenTransaction {
     }
 
     /// Returns the call of the transaction.
-    pub fn call(&self) -> Option<&(ModuleId, String, Vec<u8>)> {
+    pub fn call(&self) -> Option<&(ContractId, String, Vec<u8>)> {
         self.call.as_ref()
     }
 }
@@ -415,7 +415,7 @@ impl UnprovenTransaction {
 /// data.
 fn write_optional_call<W: Write>(
     writer: &mut W,
-    call: &Option<(ModuleId, String, Vec<u8>)>,
+    call: &Option<(ContractId, String, Vec<u8>)>,
 ) -> Result<(), BytesError> {
     match call {
         Some((cid, cname, cdata)) => {
@@ -441,7 +441,7 @@ fn write_optional_call<W: Write>(
 /// end of parsing other fields since it consumes the entirety of the buffer.
 fn read_optional_call(
     buffer: &mut &[u8],
-) -> Result<Option<(ModuleId, String, Vec<u8>)>, BytesError> {
+) -> Result<Option<(ContractId, String, Vec<u8>)>, BytesError> {
     let mut call = None;
 
     if u64::from_reader(buffer)? != 0 {
@@ -464,7 +464,7 @@ fn read_optional_call(
             (mid_buf, left)
         };
 
-        let module_id = ModuleId::from(mid_buffer);
+        let contract_id = ContractId::from(mid_buffer);
 
         let buffer = &mut buffer_left;
 
@@ -475,7 +475,7 @@ fn read_optional_call(
             .map_err(|_| BytesError::InvalidData)?;
 
         let call_data = Vec::from(buffer_left);
-        call = Some((module_id, cname, call_data));
+        call = Some((contract_id, cname, call_data));
     }
 
     Ok(call)

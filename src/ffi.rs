@@ -26,7 +26,7 @@ use rand_core::{
     impls::{next_u32_via_fill, next_u64_via_fill},
     CryptoRng, RngCore,
 };
-use rusk_abi::ModuleId;
+use rusk_abi::ContractId;
 
 use crate::tx::UnprovenTransaction;
 use crate::{
@@ -163,7 +163,7 @@ pub unsafe extern "C" fn execute(
     gas_limit: *const u64,
     gas_price: *const u64,
 ) -> u8 {
-    let contract_id = ModuleId::from_bytes(*contract_id);
+    let contract_id = ContractId::from_bytes(*contract_id);
 
     // SAFETY: these buffers are expected to have been allocated with the
     // correct size. If this is not the case problems with the allocator
