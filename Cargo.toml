@@ -1,6 +1,6 @@
 [package]
 name = "dusk-wallet-core"
-version = "0.16.0-piecrust.0.5"
+version = "0.17.0-piecrust.0.5"
 edition = "2021"
 description = "The core functionality of the Dusk wallet"
 license = "MPL-2.0"
