@@ -13,9 +13,9 @@ use dusk_bytes::{
     DeserializableSlice, Error as BytesError, Serializable, Write,
 };
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubExtended};
+use dusk_merkle::poseidon::Opening as PoseidonOpening;
 use dusk_pki::{Ownable, SecretSpendKey};
 use dusk_plonk::prelude::{JubJubScalar, Proof};
-use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Proof as SchnorrSig;
 use phoenix_core::transaction::Transaction;
 use phoenix_core::{Crossover, Fee, Note};
@@ -27,7 +27,7 @@ use rusk_abi::{ContractId, MODULE_ID_BYTES, POSEIDON_TREE_DEPTH};
 #[derive(Debug, Clone)]
 pub struct UnprovenTransactionInput {
     nullifier: BlsScalar,
-    opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
+    opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
     note: Note,
     value: u64,
     blinder: JubJubScalar,
@@ -42,7 +42,7 @@ impl UnprovenTransactionInput {
         note: Note,
         value: u64,
         blinder: JubJubScalar,
-        opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
+        opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
         tx_hash: BlsScalar,
     ) -> Self {
         let nullifier = note.gen_nullifier(ssk);
@@ -66,6 +66,10 @@ impl UnprovenTransactionInput {
     pub fn to_var_bytes(&self) -> Vec<u8> {
         let affine_pkr = JubJubAffine::from(&self.pk_r_prime);
 
+        let opening_bytes = rkyv::to_bytes::<_, 256>(&self.opening)
+            .expect("Rkyv serialization should always succeed for an opening")
+            .to_vec();
+
         let mut bytes = Vec::with_capacity(
             BlsScalar::SIZE
                 + Note::SIZE
@@ -73,7 +77,7 @@ impl UnprovenTransactionInput {
                 + SchnorrSig::SIZE
                 + u64::SIZE
                 + JubJubScalar::SIZE
-                + PoseidonBranch::<POSEIDON_TREE_DEPTH>::SIZE,
+                + opening_bytes.len(),
         );
 
         bytes.extend_from_slice(&self.nullifier.to_bytes());
@@ -82,7 +86,7 @@ impl UnprovenTransactionInput {
         bytes.extend_from_slice(&self.blinder.to_bytes());
         bytes.extend_from_slice(&affine_pkr.to_bytes());
         bytes.extend_from_slice(&self.sig.to_bytes());
-        bytes.extend_from_slice(&self.opening.to_bytes());
+        bytes.extend(opening_bytes);
 
         bytes
     }
@@ -98,7 +102,12 @@ impl UnprovenTransactionInput {
         let pk_r_prime =
             JubJubExtended::from(JubJubAffine::from_reader(&mut bytes)?);
         let sig = SchnorrSig::from_reader(&mut bytes)?;
-        let opening = PoseidonBranch::from_reader(&mut bytes)?;
+
+        // `to_vec` is required here otherwise `rkyv` will throw an alignment
+        // error
+        #[allow(clippy::unnecessary_to_owned)]
+        let opening = rkyv::from_bytes(&bytes.to_vec())
+            .map_err(|_| BytesError::InvalidData)?;
 
         Ok(Self {
             note,
@@ -117,7 +126,7 @@ impl UnprovenTransactionInput {
     }
 
     /// Returns the opening of the input.
-    pub fn opening(&self) -> &PoseidonBranch<POSEIDON_TREE_DEPTH> {
+    pub fn opening(&self) -> &PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4> {
         &self.opening
     }
 

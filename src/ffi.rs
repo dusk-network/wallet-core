@@ -17,9 +17,9 @@ use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Write;
 use dusk_bytes::{DeserializableSlice, Serializable};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
+use dusk_merkle::poseidon::Opening as PoseidonOpening;
 use dusk_pki::{PublicSpendKey, ViewKey};
 use dusk_plonk::prelude::Proof;
-use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
 use phoenix_core::{Crossover, Fee, Note};
 use rand_core::{
@@ -59,7 +59,8 @@ extern "C" {
     /// Queries the node to find the opening for a specific note.
     fn fetch_opening(
         note: *const [u8; Note::SIZE],
-        opening: *mut [u8; PoseidonBranch::<POSEIDON_TREE_DEPTH>::SIZE],
+        opening: *mut u8,
+        opening_len: *mut u32,
     ) -> u8;
 
     /// Asks the node to find the nullifiers that are already in the state and
@@ -465,13 +466,15 @@ impl StateClient for FfiStateClient {
     fn fetch_opening(
         &self,
         note: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error> {
-        let mut opening_buf =
-            [0u8; PoseidonBranch::<POSEIDON_TREE_DEPTH>::SIZE];
+    ) -> Result<PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>, Self::Error> {
+        const OPENING_BUF_SIZE: usize = 3000;
+
+        let mut opening_buf = Vec::with_capacity(OPENING_BUF_SIZE);
+        let mut opening_len = 0;
 
         let note = note.to_bytes();
         unsafe {
-            let r = fetch_opening(&note, &mut opening_buf);
+            let r = fetch_opening(&note, &mut opening_buf, &mut opening_len);
             if r != 0 {
                 return Err(r);
             }

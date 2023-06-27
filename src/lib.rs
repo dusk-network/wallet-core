@@ -24,9 +24,9 @@ use alloc::vec::Vec;
 use dusk_bls12_381_sign::{PublicKey, SecretKey};
 use dusk_bytes::{DeserializableSlice, Serializable, Write};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
+use dusk_merkle::poseidon::Opening as PoseidonOpening;
 use dusk_pki::{SecretSpendKey, ViewKey};
 use dusk_plonk::proof_system::Proof;
-use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
 use phoenix_core::{Crossover, Fee, Note};
 use rand_chacha::ChaCha12Rng;
@@ -174,7 +174,7 @@ pub trait StateClient {
     fn fetch_opening(
         &self,
         note: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error>;
+    ) -> Result<PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>, Self::Error>;
 
     /// Queries the node for the stake of a key. If the key has no stake, a
     /// `Default` stake info should be returned.

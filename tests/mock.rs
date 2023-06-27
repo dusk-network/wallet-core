@@ -8,9 +8,9 @@
 
 use dusk_bls12_381_sign::PublicKey;
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
+use dusk_merkle::poseidon::{Item, Opening as PoseidonOpening, Tree};
 use dusk_pki::{PublicSpendKey, ViewKey};
 use dusk_plonk::prelude::Proof;
-use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
 use dusk_wallet_core::{
     EnrichedNote, ProverClient, StakeInfo, StateClient, Store, Transaction,
@@ -18,6 +18,20 @@ use dusk_wallet_core::{
 };
 use phoenix_core::{Crossover, Fee, Note, NoteType};
 use rand_core::{CryptoRng, RngCore};
+
+fn default_opening() -> PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4> {
+    // Build a "default" opening
+    const POS: u64 = 42;
+    let mut tree = Tree::new();
+    tree.insert(
+        POS,
+        Item {
+            hash: BlsScalar::zero(),
+            data: (),
+        },
+    );
+    tree.opening(POS).unwrap()
+}
 
 /// Create a new wallet meant for tests. It includes a client that will always
 /// return a random anchor (same every time), and the default opening.
@@ -32,7 +46,7 @@ pub fn mock_wallet<Rng: RngCore + CryptoRng>(
 
     let notes = new_notes(rng, &psk, note_values);
     let anchor = BlsScalar::random(rng);
-    let opening = Default::default();
+    let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
     let prover = TestProverClient;
@@ -51,7 +65,7 @@ pub fn mock_canon_wallet<Rng: RngCore + CryptoRng>(
 
     let notes = new_notes(rng, &psk, note_values);
     let anchor = BlsScalar::random(rng);
-    let opening = Default::default();
+    let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
     let prover = RkyvProverClient {
@@ -72,7 +86,7 @@ pub fn mock_serde_wallet<Rng: RngCore + CryptoRng>(
 
     let notes = new_notes(rng, &psk, note_values);
     let anchor = BlsScalar::random(rng);
-    let opening = Default::default();
+    let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
     let prover = SerdeProverClient {
@@ -125,7 +139,7 @@ impl Store for TestStore {
 pub struct TestStateClient {
     notes: Vec<EnrichedNote>,
     anchor: BlsScalar,
-    opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
+    opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
 }
 
 impl TestStateClient {
@@ -133,7 +147,7 @@ impl TestStateClient {
     fn new(
         notes: Vec<EnrichedNote>,
         anchor: BlsScalar,
-        opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
+        opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
     ) -> Self {
         Self {
             notes,
@@ -167,8 +181,8 @@ impl StateClient for TestStateClient {
     fn fetch_opening(
         &self,
         _: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error> {
-        Ok(self.opening.clone())
+    ) -> Result<PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>, Self::Error> {
+        Ok(self.opening)
     }
 
     fn fetch_stake(&self, _pk: &PublicKey) -> Result<StakeInfo, Self::Error> {
