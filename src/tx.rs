@@ -13,12 +13,12 @@ use dusk_bytes::{
     DeserializableSlice, Error as BytesError, Serializable, Write,
 };
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubExtended};
-use dusk_merkle::poseidon::Opening as PoseidonOpening;
 use dusk_pki::{Ownable, SecretSpendKey};
 use dusk_plonk::prelude::{JubJubScalar, Proof};
 use dusk_schnorr::Proof as SchnorrSig;
 use phoenix_core::transaction::Transaction;
 use phoenix_core::{Crossover, Fee, Note};
+use poseidon_merkle::Opening as PoseidonOpening;
 use rand_core::{CryptoRng, RngCore};
 use rusk_abi::hash::Hasher;
 use rusk_abi::{ContractId, CONTRACT_ID_BYTES, POSEIDON_TREE_DEPTH};

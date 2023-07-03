@@ -17,11 +17,11 @@ use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Write;
 use dusk_bytes::{DeserializableSlice, Serializable};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_merkle::poseidon::Opening as PoseidonOpening;
 use dusk_pki::{PublicSpendKey, ViewKey};
 use dusk_plonk::prelude::Proof;
 use dusk_schnorr::Signature;
 use phoenix_core::{Crossover, Fee, Note};
+use poseidon_merkle::Opening as PoseidonOpening;
 use rand_core::{
     impls::{next_u32_via_fill, next_u64_via_fill},
     CryptoRng, RngCore,
