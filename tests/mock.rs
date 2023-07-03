@@ -8,7 +8,6 @@
 
 use dusk_bls12_381_sign::PublicKey;
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_merkle::poseidon::{Item, Opening as PoseidonOpening, Tree};
 use dusk_pki::{PublicSpendKey, ViewKey};
 use dusk_plonk::prelude::Proof;
 use dusk_schnorr::Signature;
@@ -17,6 +16,7 @@ use dusk_wallet_core::{
     UnprovenTransaction, Wallet, POSEIDON_TREE_DEPTH,
 };
 use phoenix_core::{Crossover, Fee, Note, NoteType};
+use poseidon_merkle::{Item, Opening as PoseidonOpening, Tree};
 use rand_core::{CryptoRng, RngCore};
 
 fn default_opening() -> PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4> {
