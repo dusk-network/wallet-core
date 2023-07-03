@@ -42,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update `dusk-poseidon` to `0.26`
 - Update `dusk-plonk` to `0.12`
 - Update `dusk-bls12_381-sign` to `0.4`
+- Update dependencies
+- Update `phoenix-core` `0.18` -> `0.20.0-rc.0`
+- Update `dusk-pki` `0.11` -> `0.12`
+- Update `dusk-schnorr` `0.12` -> `0.13`
+- Update `dusk-poseidon` `0.29.1-rc.0` -> `0.30`
+- Update `dusk-plonk` `0.13` -> `0.14`
+- Change `dusk-merkle` dependency to `poseidon-merkle` after merkle crate separation
 
 ### Fixed
 
