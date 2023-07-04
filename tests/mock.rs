@@ -6,13 +6,11 @@
 
 //! Mocks of the traits supplied by the user of the crate..
 
-use canonical::{Canon, Sink, Source};
-use canonical_derive::Canon;
 use dusk_bls12_381_sign::PublicKey;
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
+use dusk_merkle::poseidon::{Item, Opening as PoseidonOpening, Tree};
 use dusk_pki::{PublicSpendKey, ViewKey};
 use dusk_plonk::prelude::Proof;
-use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
 use dusk_wallet_core::{
     EnrichedNote, ProverClient, StakeInfo, StateClient, Store, Transaction,
@@ -20,7 +18,20 @@ use dusk_wallet_core::{
 };
 use phoenix_core::{Crossover, Fee, Note, NoteType};
 use rand_core::{CryptoRng, RngCore};
-use rusk_abi::ContractId;
+
+fn default_opening() -> PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4> {
+    // Build a "default" opening
+    const POS: u64 = 42;
+    let mut tree = Tree::new();
+    tree.insert(
+        POS,
+        Item {
+            hash: BlsScalar::zero(),
+            data: (),
+        },
+    );
+    tree.opening(POS).unwrap()
+}
 
 /// Create a new wallet meant for tests. It includes a client that will always
 /// return a random anchor (same every time), and the default opening.
@@ -35,7 +46,7 @@ pub fn mock_wallet<Rng: RngCore + CryptoRng>(
 
     let notes = new_notes(rng, &psk, note_values);
     let anchor = BlsScalar::random(rng);
-    let opening = Default::default();
+    let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
     let prover = TestProverClient;
@@ -44,20 +55,20 @@ pub fn mock_wallet<Rng: RngCore + CryptoRng>(
 }
 
 /// Create a new wallet equivalent in all ways to `mock_wallet`, but serializing
-/// and deserializing a `Transaction` using `Canon`.
+/// and deserializing a `Transaction` using `rkyv`.
 pub fn mock_canon_wallet<Rng: RngCore + CryptoRng>(
     rng: &mut Rng,
     note_values: &[u64],
-) -> Wallet<TestStore, TestStateClient, CanonProverClient> {
+) -> Wallet<TestStore, TestStateClient, RkyvProverClient> {
     let store = TestStore::new(rng);
     let psk = store.retrieve_ssk(0).unwrap().public_spend_key();
 
     let notes = new_notes(rng, &psk, note_values);
     let anchor = BlsScalar::random(rng);
-    let opening = Default::default();
+    let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
-    let prover = CanonProverClient {
+    let prover = RkyvProverClient {
         prover: TestProverClient,
     };
 
@@ -75,7 +86,7 @@ pub fn mock_serde_wallet<Rng: RngCore + CryptoRng>(
 
     let notes = new_notes(rng, &psk, note_values);
     let anchor = BlsScalar::random(rng);
-    let opening = Default::default();
+    let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
     let prover = SerdeProverClient {
@@ -128,7 +139,7 @@ impl Store for TestStore {
 pub struct TestStateClient {
     notes: Vec<EnrichedNote>,
     anchor: BlsScalar,
-    opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
+    opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
 }
 
 impl TestStateClient {
@@ -136,7 +147,7 @@ impl TestStateClient {
     fn new(
         notes: Vec<EnrichedNote>,
         anchor: BlsScalar,
-        opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
+        opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
     ) -> Self {
         Self {
             notes,
@@ -170,8 +181,8 @@ impl StateClient for TestStateClient {
     fn fetch_opening(
         &self,
         _: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error> {
-        Ok(self.opening.clone())
+    ) -> Result<PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>, Self::Error> {
+        Ok(self.opening)
     }
 
     fn fetch_stake(&self, _pk: &PublicKey) -> Result<StakeInfo, Self::Error> {
@@ -218,28 +229,11 @@ impl ProverClient for TestProverClient {
 }
 
 #[derive(Debug)]
-pub struct CanonProverClient {
+pub struct RkyvProverClient {
     prover: TestProverClient,
 }
 
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Canon)]
-pub enum Call {
-    Execute {
-        anchor: BlsScalar,
-        nullifiers: Vec<BlsScalar>,
-        fee: Fee,
-        crossover: Option<Crossover>,
-        notes: Vec<Note>,
-        spend_proof: Vec<u8>,
-        call: Option<(ContractId, Transaction)>,
-    },
-    SomeOtherVariant {
-        anchor: BlsScalar,
-    },
-}
-
-impl ProverClient for CanonProverClient {
+impl ProverClient for RkyvProverClient {
     type Error = ();
 
     fn compute_proof_and_propagate(
@@ -250,13 +244,17 @@ impl ProverClient for CanonProverClient {
 
         let tx = utx_clone.prove(Proof::default());
 
-        let mut buf = [0u8; 4096];
-        let mut sink = Sink::new(&mut buf);
-        tx.encode(&mut sink);
-        drop(sink);
+        let bytes = rkyv::to_bytes::<_, 65536>(&tx)
+            .expect("Encoding a tx should succeed")
+            .to_vec();
 
-        let mut source = Source::new(&buf);
-        let _ = Call::decode(&mut source).expect("decoding to Call to go fine");
+        let decoded_tx: Transaction = rkyv::from_bytes(&bytes)
+            .expect("Deserializing a transaction should succeed");
+
+        assert_eq!(
+            tx, decoded_tx,
+            "Encoded and decoded transaction should be equal"
+        );
 
         self.prover.compute_proof_and_propagate(utx)
     }

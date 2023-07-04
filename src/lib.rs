@@ -8,7 +8,8 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]
-#![no_std]
+#![allow(clippy::result_large_err)]
+// #![no_std]
 
 #[macro_use]
 extern crate alloc;
@@ -23,9 +24,9 @@ use alloc::vec::Vec;
 use dusk_bls12_381_sign::{PublicKey, SecretKey};
 use dusk_bytes::{DeserializableSlice, Serializable, Write};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
+use dusk_merkle::poseidon::Opening as PoseidonOpening;
 use dusk_pki::{SecretSpendKey, ViewKey};
 use dusk_plonk::proof_system::Proof;
-use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
 use phoenix_core::{Crossover, Fee, Note};
 use rand_chacha::ChaCha12Rng;
@@ -33,9 +34,14 @@ use rand_core::SeedableRng;
 use sha2::{Digest, Sha256};
 
 pub use imp::*;
-pub use tx::{Transaction, UnprovenTransaction, UnprovenTransactionInput};
+pub use phoenix_core::Transaction;
+pub use tx::{UnprovenTransaction, UnprovenTransactionInput};
 
+use phoenix_core::transaction::*;
 pub use rusk_abi::POSEIDON_TREE_DEPTH;
+
+/// The maximum size of call data.
+pub const MAX_CALL_SIZE: usize = rusk_abi::ARGBUF_LEN;
 
 /// Stores the cryptographic material necessary to derive cryptographic keys.
 pub trait Store {
@@ -77,8 +83,8 @@ pub trait Store {
 pub fn derive_ssk(seed: &[u8; 64], index: u64) -> SecretSpendKey {
     let mut hash = Sha256::new();
 
-    hash.update(&seed);
-    hash.update(&index.to_le_bytes());
+    hash.update(seed);
+    hash.update(index.to_le_bytes());
     hash.update(b"SSK");
 
     let hash = hash.finalize().into();
@@ -96,8 +102,8 @@ pub fn derive_ssk(seed: &[u8; 64], index: u64) -> SecretSpendKey {
 pub fn derive_sk(seed: &[u8; 64], index: u64) -> SecretKey {
     let mut hash = Sha256::new();
 
-    hash.update(&seed);
-    hash.update(&index.to_le_bytes());
+    hash.update(seed);
+    hash.update(index.to_le_bytes());
     hash.update(b"SK");
 
     let hash = hash.finalize().into();
@@ -168,7 +174,7 @@ pub trait StateClient {
     fn fetch_opening(
         &self,
         note: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error>;
+    ) -> Result<PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>, Self::Error>;
 
     /// Queries the node for the stake of a key. If the key has no stake, a
     /// `Default` stake info should be returned.
@@ -222,6 +228,16 @@ pub struct StakeInfo {
     pub reward: u64,
     /// Signature counter.
     pub counter: u64,
+}
+
+impl From<StakeData> for StakeInfo {
+    fn from(data: StakeData) -> Self {
+        StakeInfo {
+            amount: data.amount,
+            reward: data.reward,
+            counter: data.counter,
+        }
+    }
 }
 
 impl Serializable<32> for StakeInfo {

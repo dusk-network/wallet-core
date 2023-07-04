@@ -6,313 +6,28 @@
 
 use crate::StateClient;
 
+use alloc::string::String;
 use alloc::vec::Vec;
-use core::mem;
 
-use canonical::{Canon, CanonError, Sink, Source};
 use dusk_bytes::{
     DeserializableSlice, Error as BytesError, Serializable, Write,
 };
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubExtended};
+use dusk_merkle::poseidon::Opening as PoseidonOpening;
 use dusk_pki::{Ownable, SecretSpendKey};
 use dusk_plonk::prelude::{JubJubScalar, Proof};
-use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Proof as SchnorrSig;
+use phoenix_core::transaction::Transaction;
 use phoenix_core::{Crossover, Fee, Note};
 use rand_core::{CryptoRng, RngCore};
 use rusk_abi::hash::Hasher;
-use rusk_abi::{ContractId, POSEIDON_TREE_DEPTH};
-
-const CONTRACT_ID_SIZE: usize = mem::size_of::<ContractId>();
-
-/// The structure sent over the network representing a transaction.
-#[derive(Debug, Clone)]
-pub struct Transaction {
-    nullifiers: Vec<BlsScalar>,
-    outputs: Vec<Note>,
-    anchor: BlsScalar,
-    proof: Vec<u8>,
-    fee: Fee,
-    crossover: Option<Crossover>,
-    call: Option<(ContractId, Vec<u8>)>,
-}
-
-// This implements `Canon` to allow a transaction to pass directly though the
-// transfer contract.
-impl Canon for Transaction {
-    fn encode(&self, sink: &mut Sink) {
-        0u8.encode(sink); // tag included to call `execute` in the contract.
-        self.anchor.encode(sink);
-        self.nullifiers.encode(sink);
-        self.fee.encode(sink);
-        self.crossover.encode(sink);
-        self.outputs.encode(sink);
-        self.proof.encode(sink);
-        self.call.encode(sink);
-    }
-
-    fn decode(source: &mut Source) -> Result<Self, CanonError> {
-        u8::decode(source)?;
-
-        let anchor = Canon::decode(source)?;
-        let nullifiers = Canon::decode(source)?;
-        let fee = Canon::decode(source)?;
-        let crossover = Canon::decode(source)?;
-        let outputs = Canon::decode(source)?;
-        let proof = Canon::decode(source)?;
-        let call = Canon::decode(source)?;
-
-        Ok(Transaction {
-            anchor,
-            nullifiers,
-            fee,
-            crossover,
-            outputs,
-            proof,
-            call,
-        })
-    }
-
-    fn encoded_len(&self) -> usize {
-        0u8.encoded_len()
-            + self.anchor.encoded_len()
-            + self.nullifiers.encoded_len()
-            + self.fee.encoded_len()
-            + self.crossover.encoded_len()
-            + self.outputs.encoded_len()
-            + self.proof.encoded_len()
-            + self.call.encoded_len()
-    }
-}
-
-impl Transaction {
-    /// Creates a transaction from the skeleton and the proof.
-    fn new(tx_skel: TransactionSkeleton, proof: Proof) -> Self {
-        Self {
-            proof: proof.to_bytes().to_vec(),
-            nullifiers: tx_skel.nullifiers,
-            outputs: tx_skel.outputs,
-            anchor: tx_skel.anchor,
-            fee: tx_skel.fee,
-            crossover: tx_skel.crossover,
-            call: tx_skel.call,
-        }
-    }
-
-    /// Hashes the transaction excluding.
-    pub fn hash(&self) -> BlsScalar {
-        let skel = TransactionSkeleton::from(self.clone());
-        skel.hash()
-    }
-
-    /// Serializes the transaction into a variable length byte buffer.
-    #[allow(unused_must_use)]
-    pub fn to_var_bytes(&self) -> Vec<u8> {
-        // compute the serialized size to preallocate space
-        let size = u64::SIZE
-            + self.nullifiers.len() * BlsScalar::SIZE
-            + u64::SIZE
-            + self.outputs.len() * Note::SIZE
-            + BlsScalar::SIZE
-            + Fee::SIZE
-            + Proof::SIZE
-            + u64::SIZE
-            + self.crossover.map_or(0, |_| Crossover::SIZE)
-            + u64::SIZE
-            + self
-                .call
-                .as_ref()
-                .map(|(_, cdata)| CONTRACT_ID_SIZE + cdata.len())
-                .unwrap_or(0);
-
-        let mut bytes = vec![0u8; size];
-        let mut writer = &mut bytes[..];
-
-        writer.write(&(self.nullifiers.len() as u64).to_bytes());
-        for input in &self.nullifiers {
-            writer.write(&input.to_bytes());
-        }
-
-        writer.write(&(self.outputs.len() as u64).to_bytes());
-        for output in &self.outputs {
-            writer.write(&output.to_bytes());
-        }
-
-        writer.write(&self.anchor.to_bytes());
-        writer.write(&self.fee.to_bytes());
-        writer.write(&self.proof);
-
-        write_crossover(&mut writer, self.crossover);
-
-        write_optional_call(&mut writer, self.call.as_ref());
-
-        bytes
-    }
-
-    /// Deserializes the transaction from a bytes buffer.
-    pub fn from_slice(buf: &[u8]) -> Result<Self, BytesError> {
-        let mut buffer = buf;
-
-        let num_inputs = u64::from_reader(&mut buffer)? as usize;
-        let mut nullifiers = Vec::with_capacity(num_inputs);
-
-        for _ in 0..num_inputs {
-            nullifiers.push(BlsScalar::from_reader(&mut buffer)?);
-        }
-
-        let num_outputs = u64::from_reader(&mut buffer)? as usize;
-        let mut outputs = Vec::with_capacity(num_outputs);
-
-        for _ in 0..num_outputs {
-            outputs.push(Note::from_reader(&mut buffer)?);
-        }
-
-        let anchor = BlsScalar::from_reader(&mut buffer)?;
-        let fee = Fee::from_reader(&mut buffer)?;
-        let proof = Proof::from_reader(&mut buffer)?.to_bytes().to_vec();
-
-        let crossover = read_crossover(&mut buffer)?;
-
-        let call = read_optional_call(&mut buffer)?;
-
-        Ok(Self {
-            nullifiers,
-            outputs,
-            anchor,
-            fee,
-            crossover,
-            call,
-            proof,
-        })
-    }
-
-    /// The nullifiers in the transaction.
-    pub fn inputs(&self) -> &[BlsScalar] {
-        &self.nullifiers
-    }
-
-    /// The output notes of the transaction.
-    pub fn outputs(&self) -> &[Note] {
-        &self.outputs
-    }
-
-    /// The anchor of the transaction.
-    pub fn anchor(&self) -> BlsScalar {
-        self.anchor
-    }
-
-    /// The proof of the transaction.
-    pub fn proof(&self) -> &[u8] {
-        &self.proof
-    }
-
-    /// The fee of the transaction.
-    pub fn fee(&self) -> &Fee {
-        &self.fee
-    }
-
-    /// The crossover of the transaction.
-    pub fn crossover(&self) -> Option<&Crossover> {
-        self.crossover.as_ref()
-    }
-
-    /// The call data of the transaction.
-    pub fn call(&self) -> Option<&(ContractId, Vec<u8>)> {
-        self.call.as_ref()
-    }
-}
-
-/// Transaction skeleton.
-struct TransactionSkeleton {
-    nullifiers: Vec<BlsScalar>,
-    outputs: Vec<Note>,
-    anchor: BlsScalar,
-    fee: Fee,
-    crossover: Option<Crossover>,
-    call: Option<(ContractId, Vec<u8>)>,
-}
-
-impl TransactionSkeleton {
-    fn new(
-        nullifiers: Vec<BlsScalar>,
-        outputs: Vec<Note>,
-        anchor: BlsScalar,
-        fee: Fee,
-        crossover: Option<Crossover>,
-        call: Option<(ContractId, Vec<u8>)>,
-    ) -> Self {
-        Self {
-            nullifiers,
-            outputs,
-            anchor,
-            fee,
-            crossover,
-            call,
-        }
-    }
-
-    fn hash(&self) -> BlsScalar {
-        let mut hasher = Hasher::new();
-
-        for nullifier in &self.nullifiers {
-            hasher.update(nullifier.to_bytes());
-        }
-        for note in &self.outputs {
-            hasher.update(note.to_bytes());
-        }
-
-        hasher = hasher
-            .chain_update(self.anchor.to_bytes())
-            .chain_update(self.fee.to_bytes());
-
-        if let Some(crossover) = &self.crossover {
-            hasher.update(&crossover.to_bytes());
-        }
-
-        if let Some((cid, cdata)) = &self.call {
-            hasher.update(cid.as_bytes());
-            hasher.update(cdata);
-        }
-
-        hasher.finalize()
-    }
-}
-
-impl From<Transaction> for TransactionSkeleton {
-    fn from(tx: Transaction) -> Self {
-        Self {
-            nullifiers: tx.nullifiers,
-            outputs: tx.outputs,
-            anchor: tx.anchor,
-            fee: tx.fee,
-            crossover: tx.crossover,
-            call: tx.call,
-        }
-    }
-}
-
-impl From<UnprovenTransaction> for TransactionSkeleton {
-    fn from(utx: UnprovenTransaction) -> Self {
-        Self {
-            nullifiers: utx
-                .inputs
-                .iter()
-                .map(UnprovenTransactionInput::nullifier)
-                .collect(),
-            outputs: utx.outputs.iter().map(|o| o.0).collect(),
-            anchor: utx.anchor,
-            fee: utx.fee,
-            crossover: utx.crossover.map(|c| c.0),
-            call: utx.call,
-        }
-    }
-}
+use rusk_abi::{ContractId, CONTRACT_ID_BYTES, POSEIDON_TREE_DEPTH};
 
 /// An input to a transaction that is yet to be proven.
 #[derive(Debug, Clone)]
 pub struct UnprovenTransactionInput {
     nullifier: BlsScalar,
-    opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
+    opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
     note: Note,
     value: u64,
     blinder: JubJubScalar,
@@ -327,7 +42,7 @@ impl UnprovenTransactionInput {
         note: Note,
         value: u64,
         blinder: JubJubScalar,
-        opening: PoseidonBranch<POSEIDON_TREE_DEPTH>,
+        opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
         tx_hash: BlsScalar,
     ) -> Self {
         let nullifier = note.gen_nullifier(ssk);
@@ -351,12 +66,9 @@ impl UnprovenTransactionInput {
     pub fn to_var_bytes(&self) -> Vec<u8> {
         let affine_pkr = JubJubAffine::from(&self.pk_r_prime);
 
-        // TODO Magic number for the buffer size here.
-        // Should be corrected once dusk-poseidon implements `Serializable` for
-        // `PoseidonBranch`.
-        let mut opening_bytes = [0; opening_buf_size(POSEIDON_TREE_DEPTH)];
-        let mut sink = Sink::new(&mut opening_bytes[..]);
-        self.opening.encode(&mut sink);
+        let opening_bytes = rkyv::to_bytes::<_, 256>(&self.opening)
+            .expect("Rkyv serialization should always succeed for an opening")
+            .to_vec();
 
         let mut bytes = Vec::with_capacity(
             BlsScalar::SIZE
@@ -374,7 +86,7 @@ impl UnprovenTransactionInput {
         bytes.extend_from_slice(&self.blinder.to_bytes());
         bytes.extend_from_slice(&affine_pkr.to_bytes());
         bytes.extend_from_slice(&self.sig.to_bytes());
-        bytes.extend_from_slice(&opening_bytes);
+        bytes.extend(opening_bytes);
 
         bytes
     }
@@ -391,8 +103,10 @@ impl UnprovenTransactionInput {
             JubJubExtended::from(JubJubAffine::from_reader(&mut bytes)?);
         let sig = SchnorrSig::from_reader(&mut bytes)?;
 
-        let mut source = Source::new(bytes);
-        let opening = PoseidonBranch::decode(&mut source)
+        // `to_vec` is required here otherwise `rkyv` will throw an alignment
+        // error
+        #[allow(clippy::unnecessary_to_owned)]
+        let opening = rkyv::from_bytes(&bytes.to_vec())
             .map_err(|_| BytesError::InvalidData)?;
 
         Ok(Self {
@@ -412,7 +126,7 @@ impl UnprovenTransactionInput {
     }
 
     /// Returns the opening of the input.
-    pub fn opening(&self) -> &PoseidonBranch<POSEIDON_TREE_DEPTH> {
+    pub fn opening(&self) -> &PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4> {
         &self.opening
     }
 
@@ -442,10 +156,6 @@ impl UnprovenTransactionInput {
     }
 }
 
-const fn opening_buf_size(depth: usize) -> usize {
-    (depth + 2) * (BlsScalar::SIZE * 5 + 8)
-}
-
 /// A transaction that is yet to be proven. The purpose of this is solely to
 /// send to the node to perform a circuit proof.
 #[derive(Debug, Clone)]
@@ -455,7 +165,7 @@ pub struct UnprovenTransaction {
     anchor: BlsScalar,
     fee: Fee,
     crossover: Option<(Crossover, u64, JubJubScalar)>,
-    call: Option<(ContractId, Vec<u8>)>,
+    call: Option<(ContractId, String, Vec<u8>)>,
 }
 
 impl UnprovenTransaction {
@@ -469,7 +179,7 @@ impl UnprovenTransaction {
         outputs: Vec<(Note, u64, JubJubScalar)>,
         fee: Fee,
         crossover: Option<(Crossover, u64, JubJubScalar)>,
-        call: Option<(ContractId, Vec<u8>)>,
+        call: Option<(ContractId, String, Vec<u8>)>,
     ) -> Result<Self, SC::Error> {
         let nullifiers: Vec<BlsScalar> = inputs
             .iter()
@@ -484,15 +194,19 @@ impl UnprovenTransaction {
 
         let anchor = state.fetch_anchor()?;
 
-        let skel = TransactionSkeleton::new(
-            nullifiers,
-            outputs.iter().map(|o| o.0).collect(),
-            anchor,
-            fee,
-            crossover.map(|c| c.0),
-            call,
+        let hash_outputs: Vec<Note> = outputs.iter().map(|o| o.0).collect();
+        let hash_crossover = crossover.map(|c| c.0);
+
+        let hash_call = call.clone().map(|c| (c.0.to_bytes(), c.1, c.2));
+        let hash_bytes = Transaction::hash_input_bytes_from_components(
+            &nullifiers,
+            &hash_outputs,
+            &anchor,
+            &fee,
+            &hash_crossover,
+            &hash_call,
         );
-        let hash = skel.hash();
+        let hash = Hasher::digest(hash_bytes);
 
         let inputs: Vec<UnprovenTransactionInput> = inputs
             .into_iter()
@@ -510,14 +224,29 @@ impl UnprovenTransaction {
             anchor,
             fee,
             crossover,
-            call: skel.call,
+            call,
         })
     }
 
     /// Consumes self and a proof to generate a transaction.
     pub fn prove(self, proof: Proof) -> Transaction {
-        let skel = TransactionSkeleton::from(self);
-        Transaction::new(skel, proof)
+        Transaction {
+            anchor: self.anchor,
+            nullifiers: self
+                .inputs
+                .into_iter()
+                .map(|input| input.nullifier)
+                .collect(),
+            outputs: self
+                .outputs
+                .into_iter()
+                .map(|(note, _, _)| note)
+                .collect(),
+            fee: self.fee,
+            crossover: self.crossover.map(|c| c.0),
+            proof: proof.to_bytes().to_vec(),
+            call: self.call.map(|c| (c.0.to_bytes(), c.1, c.2)),
+        }
     }
 
     /// Serialize the transaction to a variable length byte buffer.
@@ -571,7 +300,9 @@ impl UnprovenTransaction {
             + self
                 .call
                 .as_ref()
-                .map(|(_, cdata)| CONTRACT_ID_SIZE + cdata.len())
+                .map(|(_, cname, cdata)| {
+                    CONTRACT_ID_BYTES + u64::SIZE + cname.len() + cdata.len()
+                })
                 .unwrap_or(0);
 
         let mut buf = vec![0; size];
@@ -592,7 +323,7 @@ impl UnprovenTransaction {
         writer.write(&self.fee.to_bytes());
 
         write_crossover_value_blinder(&mut writer, self.crossover);
-        write_optional_call(&mut writer, self.call.as_ref());
+        write_optional_call(&mut writer, &self.call);
 
         buf
     }
@@ -638,7 +369,22 @@ impl UnprovenTransaction {
 
     /// Returns the hash of the transaction.
     pub fn hash(&self) -> BlsScalar {
-        TransactionSkeleton::from(self.clone()).hash()
+        let nullifiers: Vec<BlsScalar> =
+            self.inputs.iter().map(|input| input.nullifier).collect();
+
+        let hash_outputs: Vec<Note> =
+            self.outputs.iter().map(|(note, _, _)| *note).collect();
+        let hash_crossover = self.crossover.map(|c| c.0);
+        let hash_bytes = self.call.clone().map(|c| (c.0.to_bytes(), c.1, c.2));
+
+        Hasher::digest(Transaction::hash_input_bytes_from_components(
+            &nullifiers,
+            &hash_outputs,
+            &self.anchor,
+            &self.fee,
+            &hash_crossover,
+            &hash_bytes,
+        ))
     }
 
     /// Returns the inputs to the transaction.
@@ -667,7 +413,7 @@ impl UnprovenTransaction {
     }
 
     /// Returns the call of the transaction.
-    pub fn call(&self) -> Option<&(ContractId, Vec<u8>)> {
+    pub fn call(&self) -> Option<&(ContractId, String, Vec<u8>)> {
         self.call.as_ref()
     }
 }
@@ -678,12 +424,18 @@ impl UnprovenTransaction {
 /// data.
 fn write_optional_call<W: Write>(
     writer: &mut W,
-    call: Option<&(ContractId, Vec<u8>)>,
+    call: &Option<(ContractId, String, Vec<u8>)>,
 ) -> Result<(), BytesError> {
     match call {
-        Some((cid, cdata)) => {
+        Some((cid, cname, cdata)) => {
             writer.write(&1_u64.to_bytes())?;
+
             writer.write(cid.as_bytes())?;
+
+            let cname_len = cname.len() as u64;
+            writer.write(&cname_len.to_bytes())?;
+            writer.write(cname.as_bytes())?;
+
             writer.write(cdata)?;
         }
         None => {
@@ -694,21 +446,48 @@ fn write_optional_call<W: Write>(
     Ok(())
 }
 
-fn write_crossover<W: Write>(
-    writer: &mut W,
-    crossover: Option<Crossover>,
-) -> Result<(), BytesError> {
-    match crossover {
-        Some(c) => {
-            writer.write(&1_u64.to_bytes())?;
-            writer.write(&c.to_bytes())?;
+/// Reads an optional call from the given buffer. This should be called at the
+/// end of parsing other fields since it consumes the entirety of the buffer.
+fn read_optional_call(
+    buffer: &mut &[u8],
+) -> Result<Option<(ContractId, String, Vec<u8>)>, BytesError> {
+    let mut call = None;
+
+    if u64::from_reader(buffer)? != 0 {
+        let buf_len = buffer.len();
+
+        // needs to be at least the size of a contract ID and have some call
+        // data.
+        if buf_len < CONTRACT_ID_BYTES {
+            return Err(BytesError::BadLength {
+                found: buf_len,
+                expected: CONTRACT_ID_BYTES,
+            });
         }
-        None => {
-            writer.write(&0_u64.to_bytes())?;
-        }
+        let (mid_buffer, mut buffer_left) = {
+            let (buf, left) = buffer.split_at(CONTRACT_ID_BYTES);
+
+            let mut mid_buf = [0u8; CONTRACT_ID_BYTES];
+            mid_buf.copy_from_slice(buf);
+
+            (mid_buf, left)
+        };
+
+        let contract_id = ContractId::from(mid_buffer);
+
+        let buffer = &mut buffer_left;
+
+        let cname_len = u64::from_reader(buffer)?;
+        let (cname_bytes, buffer_left) = buffer.split_at(cname_len as usize);
+
+        let cname = String::from_utf8(cname_bytes.to_vec())
+            .map_err(|_| BytesError::InvalidData)?;
+
+        let call_data = Vec::from(buffer_left);
+        call = Some((contract_id, cname, call_data));
     }
 
-    Ok(())
+    Ok(call)
 }
 
 fn write_crossover_value_blinder<W: Write>(
@@ -731,16 +510,6 @@ fn write_crossover_value_blinder<W: Write>(
 }
 
 /// Reads an optional crossover from the given buffer.
-fn read_crossover(buffer: &mut &[u8]) -> Result<Option<Crossover>, BytesError> {
-    let ser = match u64::from_reader(buffer)? {
-        0 => None,
-        _ => Some(Crossover::from_reader(buffer)?),
-    };
-
-    Ok(ser)
-}
-
-/// Reads an optional crossover from the given buffer.
 fn read_crossover_value_blinder(
     buffer: &mut &[u8],
 ) -> Result<Option<(Crossover, u64, JubJubScalar)>, BytesError> {
@@ -755,33 +524,4 @@ fn read_crossover_value_blinder(
     };
 
     Ok(ser)
-}
-
-/// Reads an optional call from the given buffer. This should be called at the
-/// end of parsing other fields since it consumes the entirety of the buffer.
-fn read_optional_call(
-    buffer: &mut &[u8],
-) -> Result<Option<(ContractId, Vec<u8>)>, BytesError> {
-    let mut call = None;
-
-    if u64::from_reader(buffer)? != 0 {
-        let buf_len = buffer.len();
-
-        // needs to be at least the size of a contract ID and have some call
-        // data.
-        if buf_len < CONTRACT_ID_SIZE {
-            return Err(BytesError::BadLength {
-                found: buf_len,
-                expected: CONTRACT_ID_SIZE,
-            });
-        }
-        let (cid_buffer, cdata_buffer) = buffer.split_at(CONTRACT_ID_SIZE);
-
-        let contract_id = ContractId::from(cid_buffer);
-        let call_data = Vec::from(cdata_buffer);
-
-        call = Some((contract_id, call_data));
-    }
-
-    Ok(call)
 }

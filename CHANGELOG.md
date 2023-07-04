@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Change transactions to have an optional crossover
 - Update STCT to use Schnorr signatures [#34]
 - Update dependencies
+- Update `phoenix-core` to `0.17`
+- Update `dusk-pki` to `0.11`
+- Update `dusk-schnorr` to `0.11`
+- Update `dusk-jubjub` to `0.12`
+- Update `dusk-poseidon` to `0.26`
+- Update `dusk-plonk` to `0.12`
+- Update `dusk-bls12_381-sign` to `0.4`
 
 ### Fixed
 

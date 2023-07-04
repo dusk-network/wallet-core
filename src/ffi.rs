@@ -6,20 +6,20 @@
 
 //! The foreign function interface for the wallet.
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use core::mem;
 use core::num::NonZeroU32;
 use core::ptr;
 
-use canonical::{Canon, Source};
 use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Write;
 use dusk_bytes::{DeserializableSlice, Serializable};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
+use dusk_merkle::poseidon::Opening as PoseidonOpening;
 use dusk_pki::{PublicSpendKey, ViewKey};
 use dusk_plonk::prelude::Proof;
-use dusk_poseidon::tree::PoseidonBranch;
 use dusk_schnorr::Signature;
 use phoenix_core::{Crossover, Fee, Note};
 use rand_core::{
@@ -155,6 +155,8 @@ pub unsafe extern "C" fn public_spend_key(
 #[no_mangle]
 pub unsafe extern "C" fn execute(
     contract_id: *const [u8; 32],
+    call_name_ptr: *mut u8,
+    call_name_len: *const u32,
     call_data_ptr: *mut u8,
     call_data_len: *const u32,
     sender_index: *const u64,
@@ -162,11 +164,18 @@ pub unsafe extern "C" fn execute(
     gas_limit: *const u64,
     gas_price: *const u64,
 ) -> u8 {
-    let contract_id = ContractId::from(*contract_id);
+    let contract_id = ContractId::from_bytes(*contract_id);
 
-    // SAFETY: the buffer is expected to have been allocated with the
+    // SAFETY: these buffers are expected to have been allocated with the
     // correct size. If this is not the case problems with the allocator
     // *may* happen.
+    let call_name = Vec::from_raw_parts(
+        call_name_ptr,
+        call_name_len as usize,
+        call_name_len as usize,
+    );
+    let call_name = unwrap_or_bail!(String::from_utf8(call_name));
+
     let call_data = Vec::from_raw_parts(
         call_data_ptr,
         call_data_len as usize,
@@ -178,6 +187,7 @@ pub unsafe extern "C" fn execute(
     unwrap_or_bail!(WALLET.execute(
         &mut FfiRng,
         contract_id,
+        call_name,
         call_data,
         *sender_index,
         &refund,
@@ -332,9 +342,6 @@ impl Store for FfiStore {
     }
 }
 
-// 512 KB for a buffer.
-const OPENING_BUF_SIZE: usize = 0x10000;
-
 const STCT_INPUT_SIZE: usize = Fee::SIZE
     + Crossover::SIZE
     + u64::SIZE
@@ -459,23 +466,28 @@ impl StateClient for FfiStateClient {
     fn fetch_opening(
         &self,
         note: &Note,
-    ) -> Result<PoseidonBranch<POSEIDON_TREE_DEPTH>, Self::Error> {
-        let mut opening_buf = [0u8; OPENING_BUF_SIZE];
+    ) -> Result<PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>, Self::Error> {
+        const OPENING_BUF_SIZE: usize = 3000;
 
+        let mut opening_buf = Vec::with_capacity(OPENING_BUF_SIZE);
         let mut opening_len = 0;
 
         let note = note.to_bytes();
         unsafe {
-            let r = fetch_opening(&note, &mut opening_buf[0], &mut opening_len);
+            let r = fetch_opening(
+                &note,
+                opening_buf.as_mut_ptr(),
+                &mut opening_len,
+            );
             if r != 0 {
                 return Err(r);
             }
         }
 
-        let mut source = Source::new(&opening_buf[..opening_len as usize]);
-        let branch = PoseidonBranch::decode(&mut source).map_err(
-            Error::<FfiStore, FfiStateClient, FfiProverClient>::from,
-        )?;
+        let branch = rkyv::from_bytes(&opening_buf[..opening_len as usize])
+            .map_err(
+                Error::<FfiStore, FfiStateClient, FfiProverClient>::from,
+            )?;
 
         Ok(branch)
     }
@@ -666,11 +678,12 @@ impl<S: Store, SC: StateClient, PC: ProverClient> From<Error<S, SC, PC>>
             Error::Prover(_) => 251,
             Error::NotEnoughBalance => 250,
             Error::NoteCombinationProblem => 249,
-            Error::Canon(_) => 248,
+            Error::Rkyv => 248,
             Error::Phoenix(_) => 247,
             Error::AlreadyStaked { .. } => 246,
             Error::NotStaked { .. } => 245,
             Error::NoReward { .. } => 244,
+            Error::Utf8(_) => 243,
         }
     }
 }

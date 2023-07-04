@@ -6,13 +6,14 @@
 
 use crate::tx::UnprovenTransaction;
 use crate::{
-    BalanceInfo, ProverClient, StakeInfo, StateClient, Store, Transaction,
+    BalanceInfo, ProverClient, StakeInfo, StateClient, Store, MAX_CALL_SIZE,
 };
 
+use core::convert::Infallible;
+
+use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
 
-use canonical::EncodeToVec;
-use canonical::{Canon, CanonError};
 use dusk_bls12_381_sign::{PublicKey, SecretKey, Signature};
 use dusk_bytes::{Error as BytesError, Serializable};
 use dusk_jubjub::{BlsScalar, JubJubScalar};
@@ -20,17 +21,34 @@ use dusk_pki::{
     Ownable, PublicSpendKey, SecretKey as SchnorrKey, SecretSpendKey,
     StealthAddress,
 };
-use dusk_poseidon::cipher::PoseidonCipher;
-use dusk_poseidon::sponge;
 use dusk_schnorr::Signature as SchnorrSignature;
-use phoenix_core::{Crossover, Error as PhoenixError, Fee, Note, NoteType};
+use phoenix_core::transaction::*;
+use phoenix_core::{Error as PhoenixError, Fee, Note, NoteType};
 use rand_core::{CryptoRng, Error as RngError, RngCore};
+use rkyv::ser::serializers::{
+    AllocScratchError, AllocSerializer, CompositeSerializerError,
+    SharedSerializeMapError,
+};
+use rkyv::validation::validators::CheckDeserializeError;
+use rkyv::Serialize;
 use rusk_abi::ContractId;
 
 const MAX_INPUT_NOTES: usize = 4;
 
+const TX_STAKE: &str = "stake";
+const TX_UNSTAKE: &str = "unstake";
+const TX_WITHDRAW: &str = "withdraw";
+const TX_ADD_ALLOWLIST: &str = "allow";
+
+type SerializerError = CompositeSerializerError<
+    Infallible,
+    AllocScratchError,
+    SharedSerializeMapError,
+>;
+
 /// The error type returned by this crate.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Error<S: Store, SC: StateClient, PC: ProverClient> {
     /// Underlying store error.
     Store(S::Error),
@@ -38,12 +56,14 @@ pub enum Error<S: Store, SC: StateClient, PC: ProverClient> {
     State(SC::Error),
     /// Error originating from the prover client.
     Prover(PC::Error),
-    /// Canonical stores.
-    Canon(CanonError),
+    /// Rkyv serialization.
+    Rkyv,
     /// Random number generator error.
     Rng(RngError),
     /// Serialization and deserialization of Dusk types.
     Bytes(BytesError),
+    /// Bytes were meant to be utf8 but aren't.
+    Utf8(FromUtf8Error),
     /// Originating from the transaction model.
     Phoenix(PhoenixError),
     /// Not enough balance to perform transaction.
@@ -92,6 +112,22 @@ impl<S: Store, SC: StateClient, PC: ProverClient> Error<S, SC, PC> {
     }
 }
 
+impl<S: Store, SC: StateClient, PC: ProverClient> From<SerializerError>
+    for Error<S, SC, PC>
+{
+    fn from(_: SerializerError) -> Self {
+        Self::Rkyv
+    }
+}
+
+impl<C, D, S: Store, SC: StateClient, PC: ProverClient>
+    From<CheckDeserializeError<C, D>> for Error<S, SC, PC>
+{
+    fn from(_: CheckDeserializeError<C, D>) -> Self {
+        Self::Rkyv
+    }
+}
+
 impl<S: Store, SC: StateClient, PC: ProverClient> From<RngError>
     for Error<S, SC, PC>
 {
@@ -108,19 +144,19 @@ impl<S: Store, SC: StateClient, PC: ProverClient> From<BytesError>
     }
 }
 
+impl<S: Store, SC: StateClient, PC: ProverClient> From<FromUtf8Error>
+    for Error<S, SC, PC>
+{
+    fn from(err: FromUtf8Error) -> Self {
+        Self::Utf8(err)
+    }
+}
+
 impl<S: Store, SC: StateClient, PC: ProverClient> From<PhoenixError>
     for Error<S, SC, PC>
 {
     fn from(pe: PhoenixError) -> Self {
         Self::Phoenix(pe)
-    }
-}
-
-impl<S: Store, SC: StateClient, PC: ProverClient> From<CanonError>
-    for Error<S, SC, PC>
-{
-    fn from(ce: CanonError) -> Self {
-        Self::Canon(ce)
     }
 }
 
@@ -159,11 +195,6 @@ impl<S, SC, PC> Wallet<S, SC, PC> {
         &self.prover
     }
 }
-
-const TX_STAKE: u8 = 0x00;
-const TX_UNSTAKE: u8 = 0x01;
-const TX_WITHDRAW: u8 = 0x02;
-const TX_ADD_ALLOWLIST: u8 = 0x03;
 
 impl<S, SC, PC> Wallet<S, SC, PC>
 where
@@ -286,6 +317,7 @@ where
         &self,
         rng: &mut Rng,
         contract_id: ContractId,
+        call_name: String,
         call_data: C,
         sender_index: u64,
         refund: &PublicSpendKey,
@@ -294,7 +326,7 @@ where
     ) -> Result<Transaction, Error<S, SC, PC>>
     where
         Rng: RngCore + CryptoRng,
-        C: Canon,
+        C: Serialize<AllocSerializer<MAX_CALL_SIZE>>,
     {
         let sender = self
             .store
@@ -309,7 +341,9 @@ where
         )?;
 
         let fee = Fee::new(rng, gas_limit, gas_price, refund);
-        let call = (contract_id, call_data.encode_to_vec());
+
+        let call_data = rkyv::to_bytes(&call_data)?.to_vec();
+        let call = (contract_id, call_name, call_data);
 
         let utx = UnprovenTransaction::new(
             rng,
@@ -423,11 +457,19 @@ where
         fee.gas_limit = gas_limit;
         fee.gas_price = gas_price;
 
-        let contract_id = rusk_abi::stake_contract();
+        let contract_id = rusk_abi::STAKE_CONTRACT;
         let address = rusk_abi::contract_to_scalar(&contract_id);
 
-        let stct_signature =
-            sign_stct(rng, &sender, &fee, &crossover, value, &address);
+        let contract_id = rusk_abi::contract_to_scalar(&contract_id);
+
+        let stct_message =
+            stct_signature_message(&crossover, value, contract_id);
+        let stct_message = dusk_poseidon::sponge::hash(&stct_message);
+
+        let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
+        let secret = SchnorrKey::from(sk_r);
+
+        let stct_signature = SchnorrSignature::new(&secret, rng, stct_message);
 
         let spend_proof = self
             .prover
@@ -445,10 +487,16 @@ where
 
         let signature = stake_sign(&sk, &pk, stake.counter, value);
 
-        let call_data =
-            (TX_STAKE, pk, signature, value, spend_proof).encode_to_vec();
+        let stake = Stake {
+            public_key: pk,
+            signature,
+            value,
+            proof: spend_proof,
+        };
 
-        let call = (contract_id, call_data);
+        let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&stake)?.to_vec();
+        let call =
+            (rusk_abi::STAKE_CONTRACT, String::from(TX_STAKE), call_data);
 
         let utx = UnprovenTransaction::new(
             rng,
@@ -532,12 +580,19 @@ where
 
         let signature = unstake_sign(&sk, &pk, stake.counter, unstake_note);
 
-        let call_data =
-            (TX_UNSTAKE, pk, signature, unstake_note, unstake_proof)
-                .encode_to_vec();
+        let unstake = Unstake {
+            public_key: pk,
+            signature,
+            note: unstake_note,
+            proof: unstake_proof,
+        };
 
-        let contract_id = rusk_abi::stake_contract();
-        let call = (contract_id, call_data);
+        let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&unstake)?.to_vec();
+        let call = (
+            rusk_abi::STAKE_CONTRACT,
+            String::from(TX_UNSTAKE),
+            call_data,
+        );
 
         let utx = UnprovenTransaction::new(
             rng,
@@ -610,11 +665,16 @@ where
         fee.gas_limit = gas_limit;
         fee.gas_price = gas_price;
 
-        let call_data =
-            (TX_WITHDRAW, pk, signature, address, nonce).encode_to_vec();
+        let withdraw = Withdraw {
+            public_key: pk,
+            signature,
+            address,
+            nonce,
+        };
+        let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&withdraw)?.to_vec();
 
-        let contract_id = rusk_abi::stake_contract();
-        let call = (contract_id, call_data);
+        let contract_id = rusk_abi::STAKE_CONTRACT;
+        let call = (contract_id, String::from(TX_WITHDRAW), call_data);
 
         let utx = UnprovenTransaction::new(
             rng,
@@ -650,11 +710,11 @@ where
             .retrieve_ssk(sender_index)
             .map_err(Error::from_store_err)?;
 
-        let sk = self
+        let owner_sk = self
             .store
             .retrieve_sk(owner_index)
             .map_err(Error::from_store_err)?;
-        let pk = PublicKey::from(&sk);
+        let owner_pk = PublicKey::from(&owner_sk);
 
         let (inputs, outputs) = self.inputs_and_change_output(
             rng,
@@ -663,10 +723,12 @@ where
             gas_limit * gas_price,
         )?;
 
-        let stake =
-            self.state.fetch_stake(&pk).map_err(Error::from_state_err)?;
+        let stake = self
+            .state
+            .fetch_stake(&owner_pk)
+            .map_err(Error::from_state_err)?;
 
-        let signature = allow_sign(&sk, &pk, stake.counter, staker);
+        let signature = allow_sign(&owner_sk, &owner_pk, stake.counter, staker);
 
         // Since we're not transferring value *to* the contract the crossover
         // shouldn't contain a value. As such the note used to created it should
@@ -680,11 +742,15 @@ where
         fee.gas_limit = gas_limit;
         fee.gas_price = gas_price;
 
-        let call_data =
-            (TX_ADD_ALLOWLIST, *staker, pk, signature).encode_to_vec();
+        let allow = Allow {
+            public_key: *staker,
+            owner: owner_pk,
+            signature,
+        };
+        let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&allow)?.to_vec();
 
-        let contract_id = rusk_abi::stake_contract();
-        let call = (contract_id, call_data);
+        let contract_id = rusk_abi::STAKE_CONTRACT;
+        let call = (contract_id, String::from(TX_ADD_ALLOWLIST), call_data);
 
         let utx = UnprovenTransaction::new(
             rng,
@@ -822,56 +888,6 @@ fn pick_lexicographic<F: Fn(&[usize; MAX_INPUT_NOTES]) -> bool>(
     }
 
     None
-}
-
-const STCT_MESSAGE_SIZE: usize = 5 + PoseidonCipher::cipher_size();
-
-// TODO: this is copied from the circuits. We should find a way to reuse this
-//  instead of duplicating it.
-fn sign_stct<Rng: RngCore + CryptoRng>(
-    rng: &mut Rng,
-    ssk: &SecretSpendKey,
-    fee: &Fee,
-    crossover: &Crossover,
-    value: u64,
-    address: &BlsScalar,
-) -> SchnorrSignature {
-    let sk_r = *ssk.sk_r(fee.stealth_address()).as_ref();
-    let secret = SchnorrKey::from(sk_r);
-
-    let message = {
-        let mut message = [BlsScalar::zero(); STCT_MESSAGE_SIZE];
-        let mut m = message.iter_mut();
-
-        crossover
-            .value_commitment()
-            .to_hash_inputs()
-            .iter()
-            .zip(m.by_ref())
-            .for_each(|(c, m)| *m = *c);
-
-        if let Some(m) = m.next() {
-            *m = *crossover.nonce();
-        }
-
-        crossover
-            .encrypted_data()
-            .cipher()
-            .iter()
-            .zip(m.by_ref())
-            .for_each(|(c, m)| *m = *c);
-
-        if let Some(m) = m.next() {
-            *m = value.into();
-        }
-        if let Some(m) = m.next() {
-            *m = *address;
-        }
-
-        sponge::hash(&message)
-    };
-
-    SchnorrSignature::new(&secret, rng, message)
 }
 
 /// Creates a signature compatible with what the stake contract expects for a
