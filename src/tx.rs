@@ -21,7 +21,7 @@ use phoenix_core::transaction::Transaction;
 use phoenix_core::{Crossover, Fee, Note};
 use rand_core::{CryptoRng, RngCore};
 use rusk_abi::hash::Hasher;
-use rusk_abi::{ContractId, MODULE_ID_BYTES, POSEIDON_TREE_DEPTH};
+use rusk_abi::{ContractId, CONTRACT_ID_BYTES, POSEIDON_TREE_DEPTH};
 
 /// An input to a transaction that is yet to be proven.
 #[derive(Debug, Clone)]
@@ -301,7 +301,7 @@ impl UnprovenTransaction {
                 .call
                 .as_ref()
                 .map(|(_, cname, cdata)| {
-                    MODULE_ID_BYTES + u64::SIZE + cname.len() + cdata.len()
+                    CONTRACT_ID_BYTES + u64::SIZE + cname.len() + cdata.len()
                 })
                 .unwrap_or(0);
 
@@ -458,16 +458,16 @@ fn read_optional_call(
 
         // needs to be at least the size of a contract ID and have some call
         // data.
-        if buf_len < MODULE_ID_BYTES {
+        if buf_len < CONTRACT_ID_BYTES {
             return Err(BytesError::BadLength {
                 found: buf_len,
-                expected: MODULE_ID_BYTES,
+                expected: CONTRACT_ID_BYTES,
             });
         }
         let (mid_buffer, mut buffer_left) = {
-            let (buf, left) = buffer.split_at(MODULE_ID_BYTES);
+            let (buf, left) = buffer.split_at(CONTRACT_ID_BYTES);
 
-            let mut mid_buf = [0u8; MODULE_ID_BYTES];
+            let mut mid_buf = [0u8; CONTRACT_ID_BYTES];
             mid_buf.copy_from_slice(buf);
 
             (mid_buf, left)

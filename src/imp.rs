@@ -29,6 +29,7 @@ use rkyv::ser::serializers::{
     AllocScratchError, AllocSerializer, CompositeSerializerError,
     SharedSerializeMapError,
 };
+use rkyv::validation::validators::CheckDeserializeError;
 use rkyv::Serialize;
 use rusk_abi::ContractId;
 
@@ -56,7 +57,7 @@ pub enum Error<S: Store, SC: StateClient, PC: ProverClient> {
     /// Error originating from the prover client.
     Prover(PC::Error),
     /// Rkyv serialization.
-    Rkyv(SerializerError),
+    Rkyv,
     /// Random number generator error.
     Rng(RngError),
     /// Serialization and deserialization of Dusk types.
@@ -114,8 +115,16 @@ impl<S: Store, SC: StateClient, PC: ProverClient> Error<S, SC, PC> {
 impl<S: Store, SC: StateClient, PC: ProverClient> From<SerializerError>
     for Error<S, SC, PC>
 {
-    fn from(err: SerializerError) -> Self {
-        Self::Rkyv(err)
+    fn from(_: SerializerError) -> Self {
+        Self::Rkyv
+    }
+}
+
+impl<C, D, S: Store, SC: StateClient, PC: ProverClient>
+    From<CheckDeserializeError<C, D>> for Error<S, SC, PC>
+{
+    fn from(_: CheckDeserializeError<C, D>) -> Self {
+        Self::Rkyv
     }
 }
 
@@ -448,14 +457,14 @@ where
         fee.gas_limit = gas_limit;
         fee.gas_price = gas_price;
 
-        let contract_id = rusk_abi::stake_module();
-        let address = rusk_abi::module_to_scalar(&contract_id);
+        let contract_id = rusk_abi::STAKE_CONTRACT;
+        let address = rusk_abi::contract_to_scalar(&contract_id);
 
-        let contract_id = rusk_abi::module_to_scalar(&rusk_abi::stake_module());
+        let contract_id = rusk_abi::contract_to_scalar(&contract_id);
 
         let stct_message =
             stct_signature_message(&crossover, value, contract_id);
-        let stct_message = rusk_abi::poseidon_hash(stct_message.to_vec());
+        let stct_message = dusk_poseidon::sponge::hash(&stct_message);
 
         let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
         let secret = SchnorrKey::from(sk_r);
@@ -487,7 +496,7 @@ where
 
         let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&stake)?.to_vec();
         let call =
-            (rusk_abi::stake_module(), String::from(TX_STAKE), call_data);
+            (rusk_abi::STAKE_CONTRACT, String::from(TX_STAKE), call_data);
 
         let utx = UnprovenTransaction::new(
             rng,
@@ -580,7 +589,7 @@ where
 
         let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&unstake)?.to_vec();
         let call = (
-            rusk_abi::stake_module(),
+            rusk_abi::STAKE_CONTRACT,
             String::from(TX_UNSTAKE),
             call_data,
         );
@@ -664,7 +673,7 @@ where
         };
         let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&withdraw)?.to_vec();
 
-        let contract_id = rusk_abi::stake_module();
+        let contract_id = rusk_abi::STAKE_CONTRACT;
         let call = (contract_id, String::from(TX_WITHDRAW), call_data);
 
         let utx = UnprovenTransaction::new(
@@ -740,7 +749,7 @@ where
         };
         let call_data = rkyv::to_bytes::<_, MAX_CALL_SIZE>(&allow)?.to_vec();
 
-        let contract_id = rusk_abi::stake_module();
+        let contract_id = rusk_abi::STAKE_CONTRACT;
         let call = (contract_id, String::from(TX_ADD_ALLOWLIST), call_data);
 
         let utx = UnprovenTransaction::new(

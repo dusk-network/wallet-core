@@ -474,15 +474,20 @@ impl StateClient for FfiStateClient {
 
         let note = note.to_bytes();
         unsafe {
-            let r = fetch_opening(&note, &mut opening_buf, &mut opening_len);
+            let r = fetch_opening(
+                &note,
+                opening_buf.as_mut_ptr(),
+                &mut opening_len,
+            );
             if r != 0 {
                 return Err(r);
             }
         }
 
-        let branch = PoseidonBranch::from_slice(&opening_buf).map_err(
-            Error::<FfiStore, FfiStateClient, FfiProverClient>::from,
-        )?;
+        let branch = rkyv::from_bytes(&opening_buf[..opening_len as usize])
+            .map_err(
+                Error::<FfiStore, FfiStateClient, FfiProverClient>::from,
+            )?;
 
         Ok(branch)
     }
@@ -673,7 +678,7 @@ impl<S: Store, SC: StateClient, PC: ProverClient> From<Error<S, SC, PC>>
             Error::Prover(_) => 251,
             Error::NotEnoughBalance => 250,
             Error::NoteCombinationProblem => 249,
-            Error::Rkyv(_) => 248,
+            Error::Rkyv => 248,
             Error::Phoenix(_) => 247,
             Error::AlreadyStaked { .. } => 246,
             Error::NotStaked { .. } => 245,

@@ -9,7 +9,7 @@
 #![deny(missing_docs)]
 #![deny(clippy::all)]
 #![allow(clippy::result_large_err)]
-#![no_std]
+// #![no_std]
 
 #[macro_use]
 extern crate alloc;
