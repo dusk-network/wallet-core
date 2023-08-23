@@ -5,24 +5,31 @@ edition = "2021"
 description = "The core functionality of the Dusk wallet"
 license = "MPL-2.0"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
+bytecheck = { version = "0.6", default-features = false }
+dusk-bls12_381-sign = { version = "0.4", default-features = false }
+dusk-jubjub = { version = "0.12", default-features = false }
+dusk-merkle = { version = "0.5", features = ["rkyv-impl"] }
+dusk-pki = { version = "0.12", default-features = false, features = ["rkyv-impl"] }
+dusk-poseidon = { version = "0.30", default-features = false }
+dusk-schnorr = { version = "0.13", default-features = false }
+phoenix-core = { version = "0.20.0-rc.0", default-features = false, features = ["alloc", "rkyv-impl"] }
+poseidon-merkle = { version = "0.2.1-rc.0", features = ["rkyv-impl"] }
 rand_core = "^0.6"
 rand_chacha = { version = "^0.3", default-features = false }
-sha2 = { version = "^0.10", default-features = false }
-phoenix-core = { version = "0.20.0-rc.0", default-features = false, features = ["alloc", "rkyv-impl"] }
-dusk-pki = { version = "0.12", default-features = false }
-dusk-bytes = "^0.1"
-dusk-schnorr = { version = "0.13", default-features = false }
-dusk-jubjub = { version = "0.12", default-features = false }
-dusk-poseidon = { version = "0.30", default-features = false }
-poseidon-merkle = { version = "0.2.1-rc.0", features = ["rkyv-impl"] }
-dusk-plonk = { version = "0.14", default-features = false }
+rkyv = { version = "^0.7", default-features = false }
 rusk-abi = { version = "0.10.0-piecrust.0.6", default-features = false }
-dusk-bls12_381-sign = { version = "0.4", default-features = false }
-rkyv = { version = "0.7", default-features = false }
+sha2 = { version = "^0.10", default-features = false }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+rusk-abi = "0.10.0-piecrust.0.6"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+rusk-abi = { version = "0.10.0-piecrust.0.6", default-features = false }
 
 [dev-dependencies]
 rand = "^0.8"
-
-[lib]
-crate-type = ["cdylib", "rlib"]
+wasmer = "=3.1"

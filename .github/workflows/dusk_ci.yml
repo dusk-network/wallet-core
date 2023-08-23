@@ -92,7 +92,7 @@ jobs:
         # Move the compiled package to the root for better paths in the npm module.
         # We also automatically populate the version with the given tag.
         run: >
-          ./asyncify.sh &&
+          make package &&
           sed -i "/\"version\": \"0.0.1\"/s/\"0.0.1\"/\"${GITHUB_REF:11}\"/" package.json &&
           npm publish
         env:
@@ -123,6 +123,8 @@ jobs:
         with:
           command: check
           args: --all-targets
+
+      - run: make wasm
 
       - name: Test project
         if: ${{ matrix.os != 'ubuntu-latest' || matrix.toolchain != 'nightly' }}
