@@ -9,15 +9,17 @@
 use alloc::{vec, vec::Vec};
 use core::mem;
 
-use dusk_pki::{PublicSpendKey, SecretSpendKey};
+use dusk_pki::PublicSpendKey;
 use phoenix_core::note::{ArchivedNote, Note, NoteType};
 use rkyv::validation::validators::FromBytesError;
 
 use crate::{
     key, tx, utils, ArchivedBalanceResponse, ArchivedExecuteResponse,
-    ArchivedMergeNotesResponse, ArchivedViewKeysResponse, BalanceArgs,
-    BalanceResponse, ExecuteArgs, ExecuteResponse, MergeNotesArgs,
-    MergeNotesResponse, ViewKeysArgs, ViewKeysResponse, MAX_KEY, MAX_LEN,
+    ArchivedFilterNotesResponse, ArchivedMergeNotesResponse,
+    ArchivedNullifiersResponse, ArchivedViewKeysResponse, BalanceArgs,
+    BalanceResponse, ExecuteArgs, ExecuteResponse, FilterNotesArgs,
+    FilterNotesResponse, MergeNotesArgs, MergeNotesResponse, NullifiersArgs,
+    NullifiersResponse, ViewKeysArgs, ViewKeysResponse, MAX_KEY, MAX_LEN,
 };
 
 /// Allocates a buffer of `len` bytes on the WASM memory.
@@ -133,8 +135,7 @@ pub fn execute(args: i32, len: i32) -> i32 {
             gas_limit.saturating_mul(gas_price).saturating_add(value);
 
         let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
-        let mut keys_ssk =
-            unsafe { [mem::zeroed::<SecretSpendKey>(); MAX_KEY + 1] };
+        let mut keys_ssk = unsafe { [mem::zeroed(); MAX_KEY + 1] };
         let mut keys_len = 0;
         let mut openings = openings.into_iter();
         let mut full_inputs = Vec::with_capacity(inputs.len());
@@ -256,6 +257,51 @@ pub fn merge_notes(args: i32, len: i32) -> i32 {
     MergeNotesResponse::success(notes_ptr, notes_len)
 }
 
+/// Filters a list of notes from a list of negative flags. The flags that are
+/// `true` will represent a note that must be removed from the set.
+///
+/// The arguments are expected to be rkyv serialized [FilterNotesArgs] with a
+/// pointer defined via [malloc]. It will consume the `args` allocated region
+/// and drop it.
+#[no_mangle]
+pub fn filter_notes(args: i32, len: i32) -> i32 {
+    let args = args as *mut u8;
+    let len = len as usize;
+    let args = unsafe { Vec::from_raw_parts(args, len, len) };
+
+    let FilterNotesArgs { notes, flags } = match rkyv::from_bytes(&args) {
+        Ok(a) => a,
+        Err(_) => return FilterNotesResponse::fail(),
+    };
+
+    let notes: Vec<Note> = match rkyv::from_bytes(&notes) {
+        Ok(n) => n,
+        Err(_) => return FilterNotesResponse::fail(),
+    };
+
+    let flags: Vec<bool> = match rkyv::from_bytes(&flags) {
+        Ok(f) => f,
+        Err(_) => return FilterNotesResponse::fail(),
+    };
+
+    let notes: Vec<_> = notes
+        .into_iter()
+        .zip(flags.into_iter())
+        .filter_map(|(n, f)| (!f).then_some(n))
+        .collect();
+
+    let notes = utils::sanitize_notes(notes);
+    let notes = match rkyv::to_bytes::<_, MAX_LEN>(&notes) {
+        Ok(n) => n.into_vec(),
+        Err(_) => return FilterNotesResponse::fail(),
+    };
+
+    let notes_ptr = notes.as_ptr() as u64;
+    let notes_len = notes.len() as u64;
+
+    FilterNotesResponse::success(notes_ptr, notes_len)
+}
+
 /// Returns a list of [ViewKey] that belongs to this wallet.
 ///
 /// The arguments are expected to be rkyv serialized [ViewKeysArgs] with a
@@ -285,6 +331,63 @@ pub fn view_keys(args: i32, len: i32) -> i32 {
     let vks_len = vks.len() as u64;
 
     ViewKeysResponse::success(vks_ptr, vks_len)
+}
+
+/// Returns a list of [BlsScalar] nullifiers for the given [Vec<Note>] combined
+/// with the keys of this wallet.
+///
+/// The arguments are expected to be rkyv serialized [NullifiersArgs] with a
+/// pointer defined via [malloc]. It will consume the `args` allocated region
+/// and drop it.
+#[no_mangle]
+pub fn nullifiers(args: i32, len: i32) -> i32 {
+    let args = args as *mut u8;
+    let len = len as usize;
+    let args = unsafe { Vec::from_raw_parts(args, len, len) };
+
+    let NullifiersArgs { seed, notes } = match rkyv::from_bytes(&args) {
+        Ok(a) => a,
+        Err(_) => return NullifiersResponse::fail(),
+    };
+
+    let notes: Vec<Note> = match rkyv::from_bytes(&notes) {
+        Ok(n) => n,
+        Err(_) => return NullifiersResponse::fail(),
+    };
+
+    let mut nullifiers = Vec::with_capacity(notes.len());
+    let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
+    let mut keys_ssk = unsafe { [mem::zeroed(); MAX_KEY + 1] };
+    let mut keys_len = 0;
+
+    'outer: for note in notes {
+        // we iterate all the available keys until one can successfully
+        // decrypt the note. if any fails, returns false
+        for idx in 0..=MAX_KEY {
+            if keys_len == idx {
+                keys_ssk[idx] = key::derive_ssk(&seed, idx as u64);
+                keys[idx] = keys_ssk[idx].view_key();
+                keys_len += 1;
+            }
+
+            if keys[idx].owns(&note) {
+                nullifiers.push(note.gen_nullifier(&keys_ssk[idx]));
+                continue 'outer;
+            }
+        }
+
+        return NullifiersResponse::fail();
+    }
+
+    let nullifiers = match rkyv::to_bytes::<_, MAX_LEN>(&nullifiers) {
+        Ok(n) => n.into_vec(),
+        Err(_) => return NullifiersResponse::fail(),
+    };
+
+    let nullifiers_ptr = nullifiers.as_ptr() as u64;
+    let nullifiers_len = nullifiers.len() as u64;
+
+    NullifiersResponse::success(nullifiers_ptr, nullifiers_len)
 }
 
 impl BalanceResponse {
@@ -409,6 +512,43 @@ impl MergeNotesResponse {
     }
 }
 
+impl FilterNotesResponse {
+    /// Rkyv serialized length of the response
+    pub const LEN: usize = mem::size_of::<ArchivedFilterNotesResponse>();
+
+    fn as_i32_ptr(&self) -> i32 {
+        let b = match rkyv::to_bytes::<_, MAX_LEN>(self) {
+            Ok(b) => b.into_vec(),
+            Err(_) => return 0,
+        };
+
+        let ptr = b.as_ptr() as i32;
+        mem::forget(b);
+
+        ptr
+    }
+
+    /// Returns a representation of a successful filter_notes operation.
+    pub fn success(notes_ptr: u64, notes_len: u64) -> i32 {
+        Self {
+            success: true,
+            notes_ptr,
+            notes_len,
+        }
+        .as_i32_ptr()
+    }
+
+    /// Returns a representation of the failure of the filter_notes operation.
+    pub fn fail() -> i32 {
+        Self {
+            success: false,
+            notes_ptr: 0,
+            notes_len: 0,
+        }
+        .as_i32_ptr()
+    }
+}
+
 impl ViewKeysResponse {
     /// Rkyv serialized length of the response
     pub const LEN: usize = mem::size_of::<ArchivedViewKeysResponse>();
@@ -441,6 +581,43 @@ impl ViewKeysResponse {
             success: false,
             vks_ptr: 0,
             vks_len: 0,
+        }
+        .as_i32_ptr()
+    }
+}
+
+impl NullifiersResponse {
+    /// Rkyv serialized length of the response
+    pub const LEN: usize = mem::size_of::<ArchivedNullifiersResponse>();
+
+    fn as_i32_ptr(&self) -> i32 {
+        let b = match rkyv::to_bytes::<_, MAX_LEN>(self) {
+            Ok(b) => b.into_vec(),
+            Err(_) => return 0,
+        };
+
+        let ptr = b.as_ptr() as i32;
+        mem::forget(b);
+
+        ptr
+    }
+
+    /// Returns a representation of a successful nullifiers operation.
+    pub fn success(nullifiers_ptr: u64, nullifiers_len: u64) -> i32 {
+        Self {
+            success: true,
+            nullifiers_ptr,
+            nullifiers_len,
+        }
+        .as_i32_ptr()
+    }
+
+    /// Returns a representation of the failure of the nullifiers operation.
+    pub fn fail() -> i32 {
+        Self {
+            success: false,
+            nullifiers_ptr: 0,
+            nullifiers_len: 0,
         }
         .as_i32_ptr()
     }

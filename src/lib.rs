@@ -122,6 +122,31 @@ pub struct MergeNotesResponse {
     pub notes_len: u64,
 }
 
+/// The arguments of the filter_notes function.
+#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[archive_attr(derive(CheckBytes))]
+pub struct FilterNotesArgs {
+    /// Rkyv serialized notes to be filtered.
+    pub notes: Vec<u8>,
+    /// Rkyv serialized boolean flags to be negative filtered.
+    pub flags: Vec<u8>,
+}
+
+/// The response of the filter_notes function.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize,
+)]
+#[archive_attr(derive(CheckBytes))]
+pub struct FilterNotesResponse {
+    /// Status of the execution
+    pub success: bool,
+    /// The pointer to a rkyv serialized [Vec<phoenix_core::note::Note>>]
+    /// containing the filtered notes set.
+    pub notes_ptr: u64,
+    /// The length of the rkyv serialized `notes_ptr`.
+    pub notes_len: u64,
+}
+
 /// The arguments of the view_keys function.
 #[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
 #[archive_attr(derive(CheckBytes))]
@@ -142,4 +167,29 @@ pub struct ViewKeysResponse {
     pub vks_ptr: u64,
     /// The length of the rkyv serialized `vks_ptr`.
     pub vks_len: u64,
+}
+
+/// The arguments of the nullifiers function.
+#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[archive_attr(derive(CheckBytes))]
+pub struct NullifiersArgs {
+    /// Seed used to derive the keys of the wallet.
+    pub seed: [u8; utils::RNG_SEED],
+    /// Rkyv serialized notes to have nullifiers generated.
+    pub notes: Vec<u8>,
+}
+
+/// The response of the view_keys function.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize,
+)]
+#[archive_attr(derive(CheckBytes))]
+pub struct NullifiersResponse {
+    /// Status of the execution
+    pub success: bool,
+    /// The pointer to a rkyv serialized [Vec<BlsScalar>>] containing the
+    /// nullifiers ordered list.
+    pub nullifiers_ptr: u64,
+    /// The length of the rkyv serialized `nullifiers_ptr`.
+    pub nullifiers_len: u64,
 }

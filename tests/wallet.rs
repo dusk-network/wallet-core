@@ -8,7 +8,8 @@
 
 use dusk_wallet_core::{
     tx, utils, BalanceArgs, BalanceResponse, ExecuteArgs, ExecuteResponse,
-    MergeNotesArgs, MergeNotesResponse, ViewKeysArgs, ViewKeysResponse,
+    FilterNotesArgs, FilterNotesResponse, MergeNotesArgs, MergeNotesResponse,
+    NullifiersArgs, NullifiersResponse, ViewKeysArgs, ViewKeysResponse,
     MAX_LEN,
 };
 use std::collections::HashMap;
@@ -172,6 +173,50 @@ fn merge_notes_works() {
 }
 
 #[test]
+fn filter_notes_works() {
+    let seed = [0xfa; utils::RNG_SEED];
+
+    let notes = node::raw_notes(&seed, [10, 250, 15, 39, 55]);
+    let flags = vec![true, true, false, true, false];
+    let filtered = vec![notes[2].clone(), notes[4].clone()];
+    let filtered = utils::sanitize_notes(filtered);
+
+    let notes = rkyv::to_bytes::<_, MAX_LEN>(&notes).unwrap().into_vec();
+    let flags = rkyv::to_bytes::<_, MAX_LEN>(&flags).unwrap().into_vec();
+
+    let args = FilterNotesArgs { notes, flags };
+    let args =
+        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
+
+    let mut wallet = Wallet::default();
+
+    let len = Value::I32(args.len() as i32);
+    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+
+    wallet.memory_write(ptr, &args);
+
+    let ptr = Value::I32(ptr as i32);
+    let ptr = wallet.call("filter_notes", &[ptr, len])[0].unwrap_i32() as u64;
+
+    let response = wallet.memory_read(ptr, FilterNotesResponse::LEN);
+    let response = rkyv::from_bytes::<FilterNotesResponse>(&response)
+        .expect("failed to deserialize filtered notes");
+
+    assert!(response.success);
+
+    let notes =
+        wallet.memory_read(response.notes_ptr, response.notes_len as usize);
+    let notes: Vec<phoenix_core::Note> =
+        rkyv::from_bytes(&notes).expect("failed to deserialize notes");
+
+    let ptr = Value::I32(ptr as i32);
+    let len = Value::I32(FilterNotesResponse::LEN as i32);
+    wallet.call("free_mem", &[ptr, len]);
+
+    assert_eq!(notes, filtered);
+}
+
+#[test]
 fn view_keys_works() {
     let seed = [0xfa; utils::RNG_SEED];
 
@@ -231,11 +276,49 @@ fn view_keys_works() {
     assert_eq!(keys, keys_p);
 }
 
+#[test]
+fn nullifiers_works() {
+    let seed = [0xfa; utils::RNG_SEED];
+
+    let (notes, nullifiers): (Vec<_>, Vec<_>) =
+        node::raw_notes_and_nulifiers(&seed, [10, 250, 15, 39, 55])
+            .into_iter()
+            .unzip();
+
+    let notes = rkyv::to_bytes::<_, MAX_LEN>(&notes).unwrap().into_vec();
+    let args = NullifiersArgs { seed, notes };
+    let args =
+        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
+
+    let mut wallet = Wallet::default();
+
+    let len = Value::I32(args.len() as i32);
+    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+
+    wallet.memory_write(ptr, &args);
+
+    let ptr = Value::I32(ptr as i32);
+    let ptr = wallet.call("nullifiers", &[ptr, len])[0].unwrap_i32() as u64;
+
+    let response = wallet.memory_read(ptr, NullifiersResponse::LEN);
+    let response = rkyv::from_bytes::<NullifiersResponse>(&response)
+        .expect("failed to deserialize nullifiers");
+
+    assert!(response.success);
+
+    let response = wallet
+        .memory_read(response.nullifiers_ptr, response.nullifiers_len as usize);
+    let response: Vec<dusk_jubjub::BlsScalar> =
+        rkyv::from_bytes(&response).expect("failed to deserialize nullifiers");
+
+    assert_eq!(nullifiers, response);
+}
+
 /// A node interface. It will encapsulate all the phoenix core functionality.
 mod node {
     use core::mem;
 
-    use dusk_jubjub::JubJubScalar;
+    use dusk_jubjub::{BlsScalar, JubJubScalar};
     use dusk_wallet_core::{key, tx, utils, MAX_KEY, MAX_LEN};
     use phoenix_core::{Note, NoteType};
     use rand::RngCore;
@@ -261,6 +344,35 @@ mod node {
                 } else {
                     Note::transparent(rng, &psk, value)
                 }
+            })
+            .collect()
+    }
+
+    pub fn raw_notes_and_nulifiers<Values>(
+        seed: &[u8; utils::RNG_SEED],
+        values: Values,
+    ) -> Vec<(Note, BlsScalar)>
+    where
+        Values: IntoIterator<Item = u64>,
+    {
+        let rng = &mut utils::rng(seed);
+        values
+            .into_iter()
+            .map(|value| {
+                let obfuscated = (rng.next_u32() & 1) == 1;
+                let idx = rng.next_u64() % MAX_KEY as u64;
+                let ssk = key::derive_ssk(seed, idx);
+                let psk = ssk.public_spend_key();
+
+                let note = if obfuscated {
+                    let blinder = JubJubScalar::random(rng);
+                    Note::obfuscated(rng, &psk, value, blinder)
+                } else {
+                    Note::transparent(rng, &psk, value)
+                };
+
+                let nullifier = note.gen_nullifier(&ssk);
+                (note, nullifier)
             })
             .collect()
     }
@@ -426,7 +538,9 @@ impl Default for Wallet {
         add_function(&mut f, &instance, "balance");
         add_function(&mut f, &instance, "execute");
         add_function(&mut f, &instance, "merge_notes");
+        add_function(&mut f, &instance, "filter_notes");
         add_function(&mut f, &instance, "view_keys");
+        add_function(&mut f, &instance, "nullifiers");
 
         Self {
             store,
