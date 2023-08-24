@@ -12,14 +12,16 @@ use core::mem;
 use dusk_pki::PublicSpendKey;
 use phoenix_core::note::{ArchivedNote, Note, NoteType};
 use rkyv::validation::validators::FromBytesError;
+use sha2::{Digest, Sha512};
 
 use crate::{
     key, tx, utils, ArchivedBalanceResponse, ArchivedExecuteResponse,
     ArchivedFilterNotesResponse, ArchivedMergeNotesResponse,
-    ArchivedNullifiersResponse, ArchivedViewKeysResponse, BalanceArgs,
-    BalanceResponse, ExecuteArgs, ExecuteResponse, FilterNotesArgs,
-    FilterNotesResponse, MergeNotesArgs, MergeNotesResponse, NullifiersArgs,
-    NullifiersResponse, ViewKeysArgs, ViewKeysResponse, MAX_KEY, MAX_LEN,
+    ArchivedNullifiersResponse, ArchivedSeedResponse, ArchivedViewKeysResponse,
+    BalanceArgs, BalanceResponse, ExecuteArgs, ExecuteResponse,
+    FilterNotesArgs, FilterNotesResponse, MergeNotesArgs, MergeNotesResponse,
+    NullifiersArgs, NullifiersResponse, SeedArgs, SeedResponse, ViewKeysArgs,
+    ViewKeysResponse, MAX_KEY, MAX_LEN,
 };
 
 /// Allocates a buffer of `len` bytes on the WASM memory.
@@ -39,6 +41,36 @@ pub fn free_mem(ptr: i32, len: i32) {
     unsafe {
         Vec::from_raw_parts(ptr, len, len);
     }
+}
+
+/// Computes a secure seed from the given passphrase.
+///
+/// The arguments are expected to be rkyv serialized [SeedArgs] with a
+/// pointer defined via [malloc]. It will consume the `args` allocated region
+/// and drop it.
+#[no_mangle]
+pub fn seed(args: i32, len: i32) -> i32 {
+    let args = args as *mut u8;
+    let len = len as usize;
+    let args = unsafe { Vec::from_raw_parts(args, len, len) };
+
+    let SeedArgs { passphrase } = match rkyv::from_bytes(&args) {
+        Ok(a) => a,
+        Err(_) => return SeedResponse::fail(),
+    };
+
+    let mut hash = Sha512::new();
+
+    hash.update(passphrase);
+    hash.update(b"SEED");
+
+    let seed = hash.finalize().to_vec();
+    let seed_ptr = seed.as_ptr() as u64;
+    let seed_len = seed.len() as u64;
+
+    mem::forget(seed);
+
+    SeedResponse::success(seed_ptr, seed_len)
 }
 
 /// Computes the total balance of the given notes.
@@ -388,6 +420,43 @@ pub fn nullifiers(args: i32, len: i32) -> i32 {
     let nullifiers_len = nullifiers.len() as u64;
 
     NullifiersResponse::success(nullifiers_ptr, nullifiers_len)
+}
+
+impl SeedResponse {
+    /// Rkyv serialized length of the response
+    pub const LEN: usize = mem::size_of::<ArchivedSeedResponse>();
+
+    fn as_i32_ptr(&self) -> i32 {
+        let b = match rkyv::to_bytes::<_, MAX_LEN>(self) {
+            Ok(b) => b.into_vec(),
+            Err(_) => return 0,
+        };
+
+        let ptr = b.as_ptr() as i32;
+        mem::forget(b);
+
+        ptr
+    }
+
+    /// Returns a representation of a successful seed response.
+    pub fn success(seed_ptr: u64, seed_len: u64) -> i32 {
+        Self {
+            success: true,
+            seed_ptr,
+            seed_len,
+        }
+        .as_i32_ptr()
+    }
+
+    /// Returns a representation of the failure of the seed operation.
+    pub fn fail() -> i32 {
+        Self {
+            success: false,
+            seed_ptr: 0,
+            seed_len: 0,
+        }
+        .as_i32_ptr()
+    }
 }
 
 impl BalanceResponse {

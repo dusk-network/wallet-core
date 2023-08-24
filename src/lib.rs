@@ -27,6 +27,26 @@ pub const MAX_KEY: usize = 24;
 /// The maximum allocated buffer for rkyv serialization.
 pub const MAX_LEN: usize = rusk_abi::ARGBUF_LEN;
 
+/// The arguments of the seed function.
+#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[archive_attr(derive(CheckBytes))]
+pub struct SeedArgs {
+    /// An arbitrary sequence of bytes used to generate a secure seed.
+    pub passphrase: Vec<u8>,
+}
+
+/// The response of the seed function.
+#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[archive_attr(derive(CheckBytes))]
+pub struct SeedResponse {
+    /// Status of the execution
+    pub success: bool,
+    /// Computed seed pointer.
+    pub seed_ptr: u64,
+    /// The length of the computed seed.
+    pub seed_len: u64,
+}
+
 /// The arguments of the balance function.
 #[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
 #[archive_attr(derive(CheckBytes))]

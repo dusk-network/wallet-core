@@ -9,11 +9,43 @@
 use dusk_wallet_core::{
     tx, utils, BalanceArgs, BalanceResponse, ExecuteArgs, ExecuteResponse,
     FilterNotesArgs, FilterNotesResponse, MergeNotesArgs, MergeNotesResponse,
-    NullifiersArgs, NullifiersResponse, ViewKeysArgs, ViewKeysResponse,
-    MAX_LEN,
+    NullifiersArgs, NullifiersResponse, SeedArgs, SeedResponse, ViewKeysArgs,
+    ViewKeysResponse, MAX_LEN,
 };
 use std::collections::HashMap;
 use wasmer::{imports, Function, Instance, Memory, Module, Store, Value};
+
+#[test]
+fn seed_works() {
+    let passphrase =
+        b"Taking a new step, uttering a new word, is what people fear most."
+            .to_vec();
+
+    let args = SeedArgs { passphrase };
+    let args =
+        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
+
+    let mut wallet = Wallet::default();
+
+    let len = Value::I32(args.len() as i32);
+    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+
+    wallet.memory_write(ptr, &args);
+
+    let ptr = Value::I32(ptr as i32);
+    let ptr = wallet.call("seed", &[ptr, len])[0].unwrap_i32() as u64;
+
+    let response = wallet.memory_read(ptr, SeedResponse::LEN);
+    let response = rkyv::from_bytes::<SeedResponse>(&response)
+        .expect("failed to deserialize seed");
+
+    assert!(response.success);
+
+    let seed =
+        wallet.memory_read(response.seed_ptr, response.seed_len as usize);
+
+    assert_eq!(seed.len(), utils::RNG_SEED);
+}
 
 #[test]
 fn balance_works() {
@@ -535,6 +567,7 @@ impl Default for Wallet {
 
         add_function(&mut f, &instance, "malloc");
         add_function(&mut f, &instance, "free_mem");
+        add_function(&mut f, &instance, "seed");
         add_function(&mut f, &instance, "balance");
         add_function(&mut f, &instance, "execute");
         add_function(&mut f, &instance, "merge_notes");
