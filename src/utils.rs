@@ -41,6 +41,13 @@ pub fn rng_with_index(seed: &[u8; RNG_SEED], index: u64) -> ChaCha12Rng {
     ChaCha12Rng::from_seed(hash)
 }
 
+/// Sanitize a notes input into a consumable notes set
+pub fn sanitize_notes(mut notes: Vec<Note>) -> Vec<Note> {
+    notes.sort_by_key(|n| n.hash());
+    notes.dedup();
+    notes
+}
+
 /// Perform a knapsack algorithm to define the notes to be used as input.
 ///
 /// Returns a tuple containing (unspent, inputs). `unspent` contains the notes

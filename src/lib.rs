@@ -11,7 +11,6 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use core::mem;
 
 use bytecheck::CheckBytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -21,7 +20,8 @@ pub mod key;
 pub mod tx;
 pub mod utils;
 
-/// The maximum number of keys to derive when attempting to decrypt a note.
+/// The maximum number of keys (inclusive) to derive when attempting to decrypt
+/// a note.
 pub const MAX_KEY: usize = 24;
 
 /// The maximum allocated buffer for rkyv serialization.
@@ -50,11 +50,6 @@ pub struct BalanceResponse {
     pub value: u64,
     /// Maximum value per transaction
     pub maximum: u64,
-}
-
-impl BalanceResponse {
-    /// Rkyv serialized length of the response
-    pub const LEN: usize = mem::size_of::<ArchivedBalanceResponse>();
 }
 
 /// The arguments of the execute function.
@@ -104,7 +99,47 @@ pub struct ExecuteResponse {
     pub tx_len: u64,
 }
 
-impl ExecuteResponse {
-    /// Rkyv serialized length of the response
-    pub const LEN: usize = mem::size_of::<ArchivedExecuteResponse>();
+/// The arguments of the merge_notes function.
+#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[archive_attr(derive(CheckBytes))]
+pub struct MergeNotesArgs {
+    /// All serialized list of notes to be merged.
+    pub notes: Vec<Vec<u8>>,
+}
+
+/// The response of the merge_notes function.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize,
+)]
+#[archive_attr(derive(CheckBytes))]
+pub struct MergeNotesResponse {
+    /// Status of the execution
+    pub success: bool,
+    /// The pointer to a rkyv serialized [Vec<phoenix_core::note::Note>>]
+    /// containing the merged notes set.
+    pub notes_ptr: u64,
+    /// The length of the rkyv serialized `notes_ptr`.
+    pub notes_len: u64,
+}
+
+/// The arguments of the view_keys function.
+#[derive(Debug, Clone, PartialEq, Eq, Archive, Serialize, Deserialize)]
+#[archive_attr(derive(CheckBytes))]
+pub struct ViewKeysArgs {
+    /// Seed used to derive the keys of the wallet.
+    pub seed: [u8; utils::RNG_SEED],
+}
+
+/// The response of the view_keys function.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Archive, Serialize, Deserialize,
+)]
+#[archive_attr(derive(CheckBytes))]
+pub struct ViewKeysResponse {
+    /// Status of the execution
+    pub success: bool,
+    /// The pointer to a rkyv serialized [Vec<dusk_pki::ViewKey>>].
+    pub vks_ptr: u64,
+    /// The length of the rkyv serialized `vks_ptr`.
+    pub vks_len: u64,
 }

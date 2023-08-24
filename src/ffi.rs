@@ -10,11 +10,14 @@ use alloc::{vec, vec::Vec};
 use core::mem;
 
 use dusk_pki::{PublicSpendKey, SecretSpendKey};
-use phoenix_core::note::{Note, NoteType};
+use phoenix_core::note::{ArchivedNote, Note, NoteType};
+use rkyv::validation::validators::FromBytesError;
 
 use crate::{
-    key, tx, utils, BalanceArgs, BalanceResponse, ExecuteArgs, ExecuteResponse,
-    MAX_KEY, MAX_LEN,
+    key, tx, utils, ArchivedBalanceResponse, ArchivedExecuteResponse,
+    ArchivedMergeNotesResponse, ArchivedViewKeysResponse, BalanceArgs,
+    BalanceResponse, ExecuteArgs, ExecuteResponse, MergeNotesArgs,
+    MergeNotesResponse, ViewKeysArgs, ViewKeysResponse, MAX_KEY, MAX_LEN,
 };
 
 /// Allocates a buffer of `len` bytes on the WASM memory.
@@ -53,11 +56,11 @@ pub fn balance(args: i32, len: i32) -> i32 {
     };
 
     let notes: Vec<Note> = match rkyv::from_bytes(&notes) {
-        Ok(n) => n,
+        Ok(n) => utils::sanitize_notes(n),
         Err(_) => return BalanceResponse::fail(),
     };
 
-    let mut keys = unsafe { [mem::zeroed(); MAX_KEY] };
+    let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
     let mut values = Vec::with_capacity(notes.len());
     let mut keys_len = 0;
     let mut sum = 0u64;
@@ -65,7 +68,7 @@ pub fn balance(args: i32, len: i32) -> i32 {
     'outer: for note in notes {
         // we iterate all the available keys until one can successfully decrypt
         // the note. if all fails, returns false
-        for idx in 0..MAX_KEY {
+        for idx in 0..=MAX_KEY {
             if keys_len == idx {
                 keys[idx] = key::derive_vk(&seed, idx as u64);
                 keys_len += 1;
@@ -119,6 +122,7 @@ pub fn execute(args: i32, len: i32) -> i32 {
         }: ExecuteArgs,
     ) -> Option<(Vec<u8>, Vec<u8>)> {
         let inputs: Vec<Note> = rkyv::from_bytes(&inputs).ok()?;
+        let inputs = utils::sanitize_notes(inputs);
         let openings: Vec<tx::Opening> = rkyv::from_bytes(&openings).ok()?;
         let refund: PublicSpendKey = rkyv::from_bytes(&refund).ok()?;
         let output: Option<tx::OutputValue> = rkyv::from_bytes(&output).ok()?;
@@ -128,9 +132,9 @@ pub fn execute(args: i32, len: i32) -> i32 {
         let total_output =
             gas_limit.saturating_mul(gas_price).saturating_add(value);
 
-        let mut keys = unsafe { [mem::zeroed(); MAX_KEY] };
+        let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
         let mut keys_ssk =
-            unsafe { [mem::zeroed::<SecretSpendKey>(); MAX_KEY] };
+            unsafe { [mem::zeroed::<SecretSpendKey>(); MAX_KEY + 1] };
         let mut keys_len = 0;
         let mut openings = openings.into_iter();
         let mut full_inputs = Vec::with_capacity(inputs.len());
@@ -138,7 +142,7 @@ pub fn execute(args: i32, len: i32) -> i32 {
         'outer: for input in inputs {
             // we iterate all the available keys until one can successfully
             // decrypt the note. if any fails, returns false
-            for idx in 0..MAX_KEY {
+            for idx in 0..=MAX_KEY {
                 if keys_len == idx {
                     keys_ssk[idx] = key::derive_ssk(&seed, idx as u64);
                     keys[idx] = keys_ssk[idx].view_key();
@@ -210,7 +214,83 @@ pub fn execute(args: i32, len: i32) -> i32 {
     ExecuteResponse::success(unspent_ptr, unspent_len, tx_ptr, tx_len)
 }
 
+/// Merges many lists of serialized notes into a unique, sanitized set.
+///
+/// The arguments are expected to be rkyv serialized [MergeNotesArgs] with a
+/// pointer defined via [malloc]. It will consume the `args` allocated region
+/// and drop it.
+#[no_mangle]
+pub fn merge_notes(args: i32, len: i32) -> i32 {
+    let args = args as *mut u8;
+    let len = len as usize;
+    let args = unsafe { Vec::from_raw_parts(args, len, len) };
+
+    let MergeNotesArgs { notes } = match rkyv::from_bytes(&args) {
+        Ok(a) => a,
+        Err(_) => return MergeNotesResponse::fail(),
+    };
+
+    let len = 3 * notes.len() / mem::size_of::<ArchivedNote>() / 2;
+    let notes = match notes
+        .into_iter()
+        .map(|n| rkyv::from_bytes::<Vec<Note>>(&n))
+        .try_fold::<_, _, Result<_, FromBytesError<Vec<Note>>>>(
+            Vec::with_capacity(len),
+            |mut set, notes| {
+                set.extend(notes?);
+                Ok(utils::sanitize_notes(set))
+            },
+        ) {
+        Ok(n) => n,
+        Err(_) => return MergeNotesResponse::fail(),
+    };
+
+    let notes = match rkyv::to_bytes::<_, MAX_LEN>(&notes) {
+        Ok(n) => n.into_vec(),
+        Err(_) => return MergeNotesResponse::fail(),
+    };
+
+    let notes_ptr = notes.as_ptr() as u64;
+    let notes_len = notes.len() as u64;
+
+    MergeNotesResponse::success(notes_ptr, notes_len)
+}
+
+/// Returns a list of [ViewKey] that belongs to this wallet.
+///
+/// The arguments are expected to be rkyv serialized [ViewKeysArgs] with a
+/// pointer defined via [malloc]. It will consume the `args` allocated region
+/// and drop it.
+#[no_mangle]
+pub fn view_keys(args: i32, len: i32) -> i32 {
+    let args = args as *mut u8;
+    let len = len as usize;
+    let args = unsafe { Vec::from_raw_parts(args, len, len) };
+
+    let ViewKeysArgs { seed } = match rkyv::from_bytes(&args) {
+        Ok(a) => a,
+        Err(_) => return ViewKeysResponse::fail(),
+    };
+
+    let vks: Vec<_> = (0..=MAX_KEY)
+        .map(|idx| key::derive_vk(&seed, idx as u64))
+        .collect();
+
+    let vks = match rkyv::to_bytes::<_, MAX_LEN>(&vks) {
+        Ok(k) => k.into_vec(),
+        Err(_) => return ViewKeysResponse::fail(),
+    };
+
+    let vks_ptr = vks.as_ptr() as u64;
+    let vks_len = vks.len() as u64;
+
+    ViewKeysResponse::success(vks_ptr, vks_len)
+}
+
 impl BalanceResponse {
+    /// Rkyv serialized length of the response
+    pub const LEN: usize = mem::size_of::<ArchivedBalanceResponse>();
+
     fn as_i32_ptr(&self) -> i32 {
         let b = match rkyv::to_bytes::<_, MAX_LEN>(self) {
             Ok(b) => b.into_vec(),
@@ -246,6 +326,9 @@ impl BalanceResponse {
 }
 
 impl ExecuteResponse {
+    /// Rkyv serialized length of the response
+    pub const LEN: usize = mem::size_of::<ArchivedExecuteResponse>();
+
     fn as_i32_ptr(&self) -> i32 {
         let b = match rkyv::to_bytes::<_, MAX_LEN>(self) {
             Ok(b) => b.into_vec(),
@@ -284,6 +367,80 @@ impl ExecuteResponse {
             unspent_len: 0,
             tx_ptr: 0,
             tx_len: 0,
+        }
+        .as_i32_ptr()
+    }
+}
+
+impl MergeNotesResponse {
+    /// Rkyv serialized length of the response
+    pub const LEN: usize = mem::size_of::<ArchivedMergeNotesResponse>();
+
+    fn as_i32_ptr(&self) -> i32 {
+        let b = match rkyv::to_bytes::<_, MAX_LEN>(self) {
+            Ok(b) => b.into_vec(),
+            Err(_) => return 0,
+        };
+
+        let ptr = b.as_ptr() as i32;
+        mem::forget(b);
+
+        ptr
+    }
+
+    /// Returns a representation of a successful merge_notes operation.
+    pub fn success(notes_ptr: u64, notes_len: u64) -> i32 {
+        Self {
+            success: true,
+            notes_ptr,
+            notes_len,
+        }
+        .as_i32_ptr()
+    }
+
+    /// Returns a representation of the failure of the merge_notes operation.
+    pub fn fail() -> i32 {
+        Self {
+            success: false,
+            notes_ptr: 0,
+            notes_len: 0,
+        }
+        .as_i32_ptr()
+    }
+}
+
+impl ViewKeysResponse {
+    /// Rkyv serialized length of the response
+    pub const LEN: usize = mem::size_of::<ArchivedViewKeysResponse>();
+
+    fn as_i32_ptr(&self) -> i32 {
+        let b = match rkyv::to_bytes::<_, MAX_LEN>(self) {
+            Ok(b) => b.into_vec(),
+            Err(_) => return 0,
+        };
+
+        let ptr = b.as_ptr() as i32;
+        mem::forget(b);
+
+        ptr
+    }
+
+    /// Returns a representation of a successful view_keys operation.
+    pub fn success(vks_ptr: u64, vks_len: u64) -> i32 {
+        Self {
+            success: true,
+            vks_ptr,
+            vks_len,
+        }
+        .as_i32_ptr()
+    }
+
+    /// Returns a representation of the failure of the view_keys operation.
+    pub fn fail() -> i32 {
+        Self {
+            success: false,
+            vks_ptr: 0,
+            vks_len: 0,
         }
         .as_i32_ptr()
     }

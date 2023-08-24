@@ -8,6 +8,7 @@
 
 use dusk_wallet_core::{
     tx, utils, BalanceArgs, BalanceResponse, ExecuteArgs, ExecuteResponse,
+    MergeNotesArgs, MergeNotesResponse, ViewKeysArgs, ViewKeysResponse,
     MAX_LEN,
 };
 use std::collections::HashMap;
@@ -111,6 +112,125 @@ fn execute_works() {
     assert!(execute.success);
 }
 
+#[test]
+fn merge_notes_works() {
+    let seed = [0xfa; utils::RNG_SEED];
+
+    let notes1 = node::raw_notes(&seed, [10, 250, 15, 39, 55]);
+    let notes2 = vec![notes1[1].clone(), notes1[3].clone()];
+    let notes3: Vec<_> = node::raw_notes(&seed, [10, 250, 15, 39, 55])
+        .into_iter()
+        .chain([notes1[4].clone()])
+        .collect();
+
+    let notes_unmerged: Vec<_> = notes1
+        .iter()
+        .chain(notes2.iter())
+        .chain(notes3.iter())
+        .cloned()
+        .collect();
+
+    let mut notes_merged = notes_unmerged.clone();
+    notes_merged.sort_by_key(|n| n.hash());
+    notes_merged.dedup();
+
+    assert_ne!(notes_unmerged, notes_merged);
+
+    let notes1 = rkyv::to_bytes::<_, MAX_LEN>(&notes1).unwrap().into_vec();
+    let notes2 = rkyv::to_bytes::<_, MAX_LEN>(&notes2).unwrap().into_vec();
+    let notes3 = rkyv::to_bytes::<_, MAX_LEN>(&notes3).unwrap().into_vec();
+    let notes = vec![notes1, notes2, notes3];
+
+    let args = MergeNotesArgs { notes };
+    let args =
+        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
+
+    let mut wallet = Wallet::default();
+
+    let len = Value::I32(args.len() as i32);
+    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+
+    wallet.memory_write(ptr, &args);
+
+    let ptr = Value::I32(ptr as i32);
+    let ptr = wallet.call("merge_notes", &[ptr, len])[0].unwrap_i32() as u64;
+
+    let notes = wallet.memory_read(ptr, MergeNotesResponse::LEN);
+    let notes = rkyv::from_bytes::<MergeNotesResponse>(&notes)
+        .expect("failed to deserialize merged notes");
+
+    let ptr = Value::I32(ptr as i32);
+    let len = Value::I32(MergeNotesResponse::LEN as i32);
+    wallet.call("free_mem", &[ptr, len]);
+
+    let merged = wallet.memory_read(notes.notes_ptr, notes.notes_len as usize);
+    let merged: Vec<phoenix_core::Note> =
+        rkyv::from_bytes(&merged).expect("failed to deserialize notes");
+
+    assert!(notes.success);
+    assert_eq!(merged, notes_merged);
+}
+
+#[test]
+fn view_keys_works() {
+    let seed = [0xfa; utils::RNG_SEED];
+
+    let args = ViewKeysArgs { seed };
+    let args =
+        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
+
+    let keys = {
+        let mut wallet = Wallet::default();
+
+        let len = Value::I32(args.len() as i32);
+        let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+
+        wallet.memory_write(ptr, &args);
+
+        let ptr = Value::I32(ptr as i32);
+        let ptr = wallet.call("view_keys", &[ptr, len])[0].unwrap_i32() as u64;
+
+        let response = wallet.memory_read(ptr, ViewKeysResponse::LEN);
+        let response = rkyv::from_bytes::<ViewKeysResponse>(&response)
+            .expect("failed to deserialize view keys");
+
+        assert!(response.success);
+
+        let keys =
+            wallet.memory_read(response.vks_ptr, response.vks_len as usize);
+        let keys: Vec<dusk_pki::ViewKey> =
+            rkyv::from_bytes(&keys).expect("failed to deserialize keys");
+        keys
+    };
+
+    let keys_p = {
+        let mut wallet = Wallet::default();
+
+        let len = Value::I32(args.len() as i32);
+        let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+
+        wallet.memory_write(ptr, &args);
+
+        let ptr = Value::I32(ptr as i32);
+        let ptr = wallet.call("view_keys", &[ptr, len])[0].unwrap_i32() as u64;
+
+        let response = wallet.memory_read(ptr, ViewKeysResponse::LEN);
+        let response = rkyv::from_bytes::<ViewKeysResponse>(&response)
+            .expect("failed to deserialize view keys");
+
+        assert!(response.success);
+
+        let keys =
+            wallet.memory_read(response.vks_ptr, response.vks_len as usize);
+        let keys: Vec<dusk_pki::ViewKey> =
+            rkyv::from_bytes(&keys).expect("failed to deserialize keys");
+        keys
+    };
+
+    // assert keys generation is deterministic
+    assert_eq!(keys, keys_p);
+}
+
 /// A node interface. It will encapsulate all the phoenix core functionality.
 mod node {
     use core::mem;
@@ -120,15 +240,15 @@ mod node {
     use phoenix_core::{Note, NoteType};
     use rand::RngCore;
 
-    pub fn notes<Values>(
+    pub fn raw_notes<Values>(
         seed: &[u8; utils::RNG_SEED],
         values: Values,
-    ) -> Vec<u8>
+    ) -> Vec<Note>
     where
         Values: IntoIterator<Item = u64>,
     {
         let rng = &mut utils::rng(seed);
-        let notes: Vec<_> = values
+        values
             .into_iter()
             .map(|value| {
                 let obfuscated = (rng.next_u32() & 1) == 1;
@@ -142,9 +262,17 @@ mod node {
                     Note::transparent(rng, &psk, value)
                 }
             })
-            .collect();
+            .collect()
+    }
 
-        rkyv::to_bytes::<_, MAX_LEN>(&notes)
+    pub fn notes<Values>(
+        seed: &[u8; utils::RNG_SEED],
+        values: Values,
+    ) -> Vec<u8>
+    where
+        Values: IntoIterator<Item = u64>,
+    {
+        rkyv::to_bytes::<_, MAX_LEN>(&raw_notes(seed, values))
             .expect("failed to serialize notes")
             .into_vec()
     }
@@ -297,6 +425,8 @@ impl Default for Wallet {
         add_function(&mut f, &instance, "free_mem");
         add_function(&mut f, &instance, "balance");
         add_function(&mut f, &instance, "execute");
+        add_function(&mut f, &instance, "merge_notes");
+        add_function(&mut f, &instance, "view_keys");
 
         Self {
             store,
