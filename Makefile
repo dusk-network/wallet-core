@@ -16,8 +16,7 @@ wasm: ## Build the WASM files
 			--target wasm32-unknown-unknown
 
 package: ## Prepare the WASM npm package
-	wasm-opt -O4 \
-		--output-target/wasm32-unknown-unknown/release/dusk_wallet_core.wasm \
+	wasm-opt -O4 target/wasm32-unknown-unknown/release/dusk_wallet_core.wasm \
 		-o mod.wasm
 
 .PHONY: test wasm help
