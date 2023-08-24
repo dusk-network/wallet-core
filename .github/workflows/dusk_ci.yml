@@ -120,6 +120,9 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
 
+      - name: Add WASM target
+        run: rustup target add wasm32-unknown-unknown
+
       - run: make wasm
 
       - name: Run cargo check

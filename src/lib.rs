@@ -48,6 +48,8 @@ pub struct BalanceResponse {
     pub success: bool,
     /// Total computed balance
     pub value: u64,
+    /// Maximum value per transaction
+    pub maximum: u64,
 }
 
 impl BalanceResponse {

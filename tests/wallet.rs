@@ -16,7 +16,7 @@ use wasmer::{imports, Function, Instance, Memory, Module, Store, Value};
 #[test]
 fn balance_works() {
     let seed = [0xfa; utils::RNG_SEED];
-    let values = [10, 250, 15, 39];
+    let values = [10, 250, 15, 39, 55];
 
     let notes = node::notes(&seed, values);
 
@@ -42,7 +42,8 @@ fn balance_works() {
     wallet.call("free_mem", &[ptr, len]);
 
     assert!(balance.success);
-    assert_eq!(balance.value, values.into_iter().sum::<u64>())
+    assert_eq!(balance.value, values.into_iter().sum::<u64>());
+    assert_eq!(balance.maximum, 359);
 }
 
 #[test]

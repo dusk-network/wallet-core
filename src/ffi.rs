@@ -58,6 +58,7 @@ pub fn balance(args: i32, len: i32) -> i32 {
     };
 
     let mut keys = unsafe { [mem::zeroed(); MAX_KEY] };
+    let mut values = Vec::with_capacity(notes.len());
     let mut keys_len = 0;
     let mut sum = 0u64;
 
@@ -71,6 +72,7 @@ pub fn balance(args: i32, len: i32) -> i32 {
             }
 
             if let Ok(v) = note.value(Some(&keys[idx])) {
+                values.push(v);
                 sum = sum.saturating_add(v);
                 continue 'outer;
             }
@@ -79,7 +81,12 @@ pub fn balance(args: i32, len: i32) -> i32 {
         return BalanceResponse::fail();
     }
 
-    BalanceResponse::success(sum)
+    // the top 4 notes are the maximum value a transaction can have, given the
+    // circuit accepts up to 4 inputs
+    values.sort_by(|a, b| b.cmp(a));
+    let maximum = values.iter().take(4).sum::<u64>();
+
+    BalanceResponse::success(sum, maximum)
 }
 
 /// Computes a serialized unproven transaction from the given arguments.
@@ -218,10 +225,11 @@ impl BalanceResponse {
 
     /// Returns a representation of a successful balance operation with the
     /// computed value.
-    pub fn success(value: u64) -> i32 {
+    pub fn success(value: u64, maximum: u64) -> i32 {
         Self {
             success: true,
             value,
+            maximum,
         }
         .as_i32_ptr()
     }
@@ -231,6 +239,7 @@ impl BalanceResponse {
         Self {
             success: false,
             value: 0,
+            maximum: 0,
         }
         .as_i32_ptr()
     }
