@@ -10,10 +10,9 @@
 
 #![allow(missing_docs)]
 
-use alloc::string::String;
 use alloc::vec::Vec;
-use serde::{Deserialize, Serialize};
-#[doc = " The arguments of the balance function"]
+use alloc::string::String;
+use serde::{Serialize, Deserialize};#[doc = " The arguments of the balance function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct BalanceArgs {
     #[doc = " A rkyv serialized [Vec<phoenix_core::Note>]; all notes should have their keys derived from "]
