@@ -6,148 +6,123 @@
 
 //! Wallet library tests.
 
-use dusk_wallet_core::{
-    tx, utils, BalanceArgs, BalanceResponse, ExecuteArgs, ExecuteResponse,
-    FilterNotesArgs, FilterNotesResponse, MergeNotesArgs, MergeNotesResponse,
-    NullifiersArgs, NullifiersResponse, SeedArgs, SeedResponse, ViewKeysArgs,
-    ViewKeysResponse, MAX_LEN,
-};
-use std::collections::HashMap;
-use wasmer::{imports, Function, Instance, Memory, Module, Store, Value};
+use dusk_bytes::Serializable;
+use dusk_pki::PublicSpendKey;
+use dusk_wallet_core::{tx, types, utils, MAX_LEN, RNG_SEED};
+use rusk_abi::ContractId;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use wasmer::{imports, Instance, Module, Store, Value};
 
 #[test]
 fn seed_works() {
-    let passphrase =
-        b"Taking a new step, uttering a new word, is what people fear most."
-            .to_vec();
-
-    let args = SeedArgs { passphrase };
-    let args =
-        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
-
     let mut wallet = Wallet::default();
 
-    let len = Value::I32(args.len() as i32);
-    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+    let seed = wallet.call("seed", json!({
+        "passphrase": b"Taking a new step, uttering a new word, is what people fear most.".to_vec()
+    })).take_memory();
 
-    wallet.memory_write(ptr, &args);
-
-    let ptr = Value::I32(ptr as i32);
-    let ptr = wallet.call("seed", &[ptr, len])[0].unwrap_i32() as u64;
-
-    let response = wallet.memory_read(ptr, SeedResponse::LEN);
-    let response = rkyv::from_bytes::<SeedResponse>(&response)
-        .expect("failed to deserialize seed");
-
-    assert!(response.success);
-
-    let seed =
-        wallet.memory_read(response.seed_ptr, response.seed_len as usize);
-
-    assert_eq!(seed.len(), utils::RNG_SEED);
+    assert_eq!(seed.len(), RNG_SEED);
 }
 
 #[test]
 fn balance_works() {
-    let seed = [0xfa; utils::RNG_SEED];
+    let seed = [0xfa; RNG_SEED];
     let values = [10, 250, 15, 39, 55];
+    let mut wallet = Wallet::default();
 
-    let notes = node::notes(&seed, values);
+    let types::BalanceResponse { maximum, value } = wallet
+        .call(
+            "balance",
+            json!({
+                "notes": node::notes(&seed, values),
+                "seed": seed.to_vec(),
+            }),
+        )
+        .take_contents();
 
-    let args = BalanceArgs { seed, notes };
-    let args =
-        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
+    assert_eq!(value, values.into_iter().sum::<u64>());
+    assert_eq!(maximum, 359);
+}
+
+#[test]
+fn public_spend_key_works() {
+    let seed = [0xfa; RNG_SEED];
 
     let mut wallet = Wallet::default();
 
-    let len = Value::I32(args.len() as i32);
-    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+    let psk = wallet
+        .call(
+            "public_spend_key",
+            json!({
+                "seed": seed.to_vec(),
+                "idx": 3
+            }),
+        )
+        .take_memory();
 
-    wallet.memory_write(ptr, &args);
+    let psk = bs58::decode(psk).into_vec().unwrap();
+    let mut psk_array = [0u8; PublicSpendKey::SIZE];
 
-    let ptr = Value::I32(ptr as i32);
-    let ptr = wallet.call("balance", &[ptr, len])[0].unwrap_i32() as u64;
-    let balance = wallet.memory_read(ptr, BalanceResponse::LEN);
-    let balance = rkyv::from_bytes::<BalanceResponse>(&balance)
-        .expect("failed to deserialize balance");
-
-    let ptr = Value::I32(ptr as i32);
-    let len = Value::I32(BalanceResponse::LEN as i32);
-    wallet.call("free_mem", &[ptr, len]);
-
-    assert!(balance.success);
-    assert_eq!(balance.value, values.into_iter().sum::<u64>());
-    assert_eq!(balance.maximum, 359);
+    psk_array.copy_from_slice(&psk);
+    PublicSpendKey::from_bytes(&psk_array).unwrap();
 }
 
 #[test]
 fn execute_works() {
-    let seed = [0xfa; utils::RNG_SEED];
-    let rng_seed = [0xfb; utils::RNG_SEED];
+    let seed = [0xfa; RNG_SEED];
+    let rng_seed = [0xfb; RNG_SEED];
     let values = [10, 250, 15, 7500];
-
-    let (inputs, openings) = node::notes_and_openings(&seed, values);
-    let refund = node::psk(&seed);
-    let output = node::output(&seed, 133);
-    let crossover = 35;
-    let gas_limit = 100;
-    let gas_price = 2;
-    let call = node::empty_call_data();
-    let args = ExecuteArgs {
-        seed,
-        rng_seed,
-        inputs,
-        openings,
-        refund,
-        output,
-        crossover,
-        gas_limit,
-        gas_price,
-        call,
-    };
-    let args =
-        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
 
     let mut wallet = Wallet::default();
 
-    let len = Value::I32(args.len() as i32);
-    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+    let psk = wallet
+        .call(
+            "public_spend_key",
+            json!({
+                "seed": seed.to_vec(),
+                "idx":5
+            }),
+        )
+        .take_memory();
+    let psk = String::from_utf8(psk).unwrap();
 
-    wallet.memory_write(ptr, &args);
+    let mut contract = ContractId::uninitialized();
+    contract.as_bytes_mut().iter_mut().for_each(|b| *b = 0xfa);
+    let contract = bs58::encode(contract.as_bytes()).into_string();
 
-    let ptr = Value::I32(ptr as i32);
-    let ptr = wallet.call("execute", &[ptr, len])[0].unwrap_i32() as u64;
-    let execute = wallet.memory_read(ptr, ExecuteResponse::LEN);
-    let execute = rkyv::from_bytes::<ExecuteResponse>(&execute)
-        .expect("failed to deserialize execute");
+    let (inputs, openings) = node::notes_and_openings(&seed, values);
+    let args = json!({
+        "call": {
+            "contract": contract,
+            "method": "commit",
+            "payload": b"We lost because we told ourselves we lost.".to_vec(),
+        },
+        "crossover": 25,
+        "gas_limit": 100,
+        "gas_price": 2,
+        "inputs": inputs,
+        "openings": openings,
+        "output": {
+            "note_type": "Transparent",
+            "receiver": psk.clone(),
+            "ref_id": 15,
+            "value": 10,
+        },
+        "refund": psk,
+        "rng_seed": rng_seed.to_vec(),
+        "seed": seed.to_vec()
+    });
+    let types::ExecuteResponse { tx, unspent } =
+        wallet.call("execute", args).take_contents();
 
-    let ptr = Value::I32(ptr as i32);
-    let len = Value::I32(ExecuteResponse::LEN as i32);
-    wallet.call("free_mem", &[ptr, len]);
-
-    let unspent =
-        wallet.memory_read(execute.unspent_ptr, execute.unspent_len as usize);
-    let _unspent: Vec<phoenix_core::Note> =
-        rkyv::from_bytes(&unspent).expect("failed to deserialize notes");
-
-    let ptr = Value::I32(execute.unspent_ptr as i32);
-    let len = Value::I32(execute.unspent_len as i32);
-    wallet.call("free_mem", &[ptr, len]);
-
-    let tx = wallet.memory_read(execute.tx_ptr, execute.tx_len as usize);
-    let _tx: tx::UnprovenTransaction =
-        rkyv::from_bytes(&tx).expect("failed to deserialize tx");
-
-    let ptr = Value::I32(execute.tx_ptr as i32);
-    let len = Value::I32(execute.tx_len as i32);
-    wallet.call("free_mem", &[ptr, len]);
-
-    assert!(execute.success);
+    rkyv::from_bytes::<tx::UnprovenTransaction>(&tx).unwrap();
+    rkyv::from_bytes::<Vec<phoenix_core::Note>>(&unspent).unwrap();
 }
 
 #[test]
 fn merge_notes_works() {
-    let seed = [0xfa; utils::RNG_SEED];
+    let seed = [0xfa; RNG_SEED];
 
     let notes1 = node::raw_notes(&seed, [10, 250, 15, 39, 55]);
     let notes2 = vec![notes1[1].clone(), notes1[3].clone()];
@@ -174,39 +149,20 @@ fn merge_notes_works() {
     let notes3 = rkyv::to_bytes::<_, MAX_LEN>(&notes3).unwrap().into_vec();
     let notes = vec![notes1, notes2, notes3];
 
-    let args = MergeNotesArgs { notes };
-    let args =
-        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
-
     let mut wallet = Wallet::default();
 
-    let len = Value::I32(args.len() as i32);
-    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+    let notes = wallet
+        .call("merge_notes", json!({ "notes": notes }))
+        .take_memory();
 
-    wallet.memory_write(ptr, &args);
+    let notes = rkyv::from_bytes::<Vec<phoenix_core::Note>>(&notes).unwrap();
 
-    let ptr = Value::I32(ptr as i32);
-    let ptr = wallet.call("merge_notes", &[ptr, len])[0].unwrap_i32() as u64;
-
-    let notes = wallet.memory_read(ptr, MergeNotesResponse::LEN);
-    let notes = rkyv::from_bytes::<MergeNotesResponse>(&notes)
-        .expect("failed to deserialize merged notes");
-
-    let ptr = Value::I32(ptr as i32);
-    let len = Value::I32(MergeNotesResponse::LEN as i32);
-    wallet.call("free_mem", &[ptr, len]);
-
-    let merged = wallet.memory_read(notes.notes_ptr, notes.notes_len as usize);
-    let merged: Vec<phoenix_core::Note> =
-        rkyv::from_bytes(&merged).expect("failed to deserialize notes");
-
-    assert!(notes.success);
-    assert_eq!(merged, notes_merged);
+    assert_eq!(notes, notes_merged);
 }
 
 #[test]
 fn filter_notes_works() {
-    let seed = [0xfa; utils::RNG_SEED];
+    let seed = [0xfa; RNG_SEED];
 
     let notes = node::raw_notes(&seed, [10, 250, 15, 39, 55]);
     let flags = vec![true, true, false, true, false];
@@ -214,103 +170,39 @@ fn filter_notes_works() {
     let filtered = utils::sanitize_notes(filtered);
 
     let notes = rkyv::to_bytes::<_, MAX_LEN>(&notes).unwrap().into_vec();
-    let flags = rkyv::to_bytes::<_, MAX_LEN>(&flags).unwrap().into_vec();
-
-    let args = FilterNotesArgs { notes, flags };
-    let args =
-        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
 
     let mut wallet = Wallet::default();
 
-    let len = Value::I32(args.len() as i32);
-    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
+    let notes = wallet
+        .call("filter_notes", json!({ "flags": flags, "notes": notes }))
+        .take_memory();
 
-    wallet.memory_write(ptr, &args);
-
-    let ptr = Value::I32(ptr as i32);
-    let ptr = wallet.call("filter_notes", &[ptr, len])[0].unwrap_i32() as u64;
-
-    let response = wallet.memory_read(ptr, FilterNotesResponse::LEN);
-    let response = rkyv::from_bytes::<FilterNotesResponse>(&response)
-        .expect("failed to deserialize filtered notes");
-
-    assert!(response.success);
-
-    let notes =
-        wallet.memory_read(response.notes_ptr, response.notes_len as usize);
-    let notes: Vec<phoenix_core::Note> =
-        rkyv::from_bytes(&notes).expect("failed to deserialize notes");
-
-    let ptr = Value::I32(ptr as i32);
-    let len = Value::I32(FilterNotesResponse::LEN as i32);
-    wallet.call("free_mem", &[ptr, len]);
+    let notes = rkyv::from_bytes::<Vec<phoenix_core::Note>>(&notes).unwrap();
 
     assert_eq!(notes, filtered);
 }
 
 #[test]
 fn view_keys_works() {
-    let seed = [0xfa; utils::RNG_SEED];
+    let seed = [0xfa; RNG_SEED];
 
-    let args = ViewKeysArgs { seed };
-    let args =
-        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
+    let mut wallet = Wallet::default();
 
-    let keys = {
-        let mut wallet = Wallet::default();
+    let vk = wallet
+        .call(
+            "view_keys",
+            json!({
+                "seed": seed.to_vec()
+            }),
+        )
+        .take_memory();
 
-        let len = Value::I32(args.len() as i32);
-        let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
-
-        wallet.memory_write(ptr, &args);
-
-        let ptr = Value::I32(ptr as i32);
-        let ptr = wallet.call("view_keys", &[ptr, len])[0].unwrap_i32() as u64;
-
-        let response = wallet.memory_read(ptr, ViewKeysResponse::LEN);
-        let response = rkyv::from_bytes::<ViewKeysResponse>(&response)
-            .expect("failed to deserialize view keys");
-
-        assert!(response.success);
-
-        let keys =
-            wallet.memory_read(response.vks_ptr, response.vks_len as usize);
-        let keys: Vec<dusk_pki::ViewKey> =
-            rkyv::from_bytes(&keys).expect("failed to deserialize keys");
-        keys
-    };
-
-    let keys_p = {
-        let mut wallet = Wallet::default();
-
-        let len = Value::I32(args.len() as i32);
-        let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
-
-        wallet.memory_write(ptr, &args);
-
-        let ptr = Value::I32(ptr as i32);
-        let ptr = wallet.call("view_keys", &[ptr, len])[0].unwrap_i32() as u64;
-
-        let response = wallet.memory_read(ptr, ViewKeysResponse::LEN);
-        let response = rkyv::from_bytes::<ViewKeysResponse>(&response)
-            .expect("failed to deserialize view keys");
-
-        assert!(response.success);
-
-        let keys =
-            wallet.memory_read(response.vks_ptr, response.vks_len as usize);
-        let keys: Vec<dusk_pki::ViewKey> =
-            rkyv::from_bytes(&keys).expect("failed to deserialize keys");
-        keys
-    };
-
-    // assert keys generation is deterministic
-    assert_eq!(keys, keys_p);
+    rkyv::from_bytes::<Vec<dusk_pki::ViewKey>>(&vk).unwrap();
 }
 
 #[test]
 fn nullifiers_works() {
-    let seed = [0xfa; utils::RNG_SEED];
+    let seed = [0xfa; RNG_SEED];
 
     let (notes, nullifiers): (Vec<_>, Vec<_>) =
         node::raw_notes_and_nulifiers(&seed, [10, 250, 15, 39, 55])
@@ -318,30 +210,21 @@ fn nullifiers_works() {
             .unzip();
 
     let notes = rkyv::to_bytes::<_, MAX_LEN>(&notes).unwrap().into_vec();
-    let args = NullifiersArgs { seed, notes };
-    let args =
-        rkyv::to_bytes::<_, MAX_LEN>(&args).expect("failed to serialize args");
 
     let mut wallet = Wallet::default();
 
-    let len = Value::I32(args.len() as i32);
-    let ptr = wallet.call("malloc", &[len.clone()])[0].unwrap_i32() as u64;
-
-    wallet.memory_write(ptr, &args);
-
-    let ptr = Value::I32(ptr as i32);
-    let ptr = wallet.call("nullifiers", &[ptr, len])[0].unwrap_i32() as u64;
-
-    let response = wallet.memory_read(ptr, NullifiersResponse::LEN);
-    let response = rkyv::from_bytes::<NullifiersResponse>(&response)
-        .expect("failed to deserialize nullifiers");
-
-    assert!(response.success);
-
     let response = wallet
-        .memory_read(response.nullifiers_ptr, response.nullifiers_len as usize);
-    let response: Vec<dusk_jubjub::BlsScalar> =
-        rkyv::from_bytes(&response).expect("failed to deserialize nullifiers");
+        .call(
+            "nullifiers",
+            json!({
+                "seed": seed.to_vec(),
+                "notes": notes
+            }),
+        )
+        .take_memory();
+
+    let response =
+        rkyv::from_bytes::<Vec<dusk_jubjub::BlsScalar>>(&response).unwrap();
 
     assert_eq!(nullifiers, response);
 }
@@ -351,14 +234,11 @@ mod node {
     use core::mem;
 
     use dusk_jubjub::{BlsScalar, JubJubScalar};
-    use dusk_wallet_core::{key, tx, utils, MAX_KEY, MAX_LEN};
-    use phoenix_core::{Note, NoteType};
+    use dusk_wallet_core::{key, tx, utils, MAX_KEY, MAX_LEN, RNG_SEED};
+    use phoenix_core::Note;
     use rand::RngCore;
 
-    pub fn raw_notes<Values>(
-        seed: &[u8; utils::RNG_SEED],
-        values: Values,
-    ) -> Vec<Note>
+    pub fn raw_notes<Values>(seed: &[u8; RNG_SEED], values: Values) -> Vec<Note>
     where
         Values: IntoIterator<Item = u64>,
     {
@@ -380,8 +260,38 @@ mod node {
             .collect()
     }
 
+    pub fn notes<Values>(seed: &[u8; RNG_SEED], values: Values) -> Vec<u8>
+    where
+        Values: IntoIterator<Item = u64>,
+    {
+        rkyv::to_bytes::<_, MAX_LEN>(&raw_notes(seed, values))
+            .expect("failed to serialize notes")
+            .into_vec()
+    }
+
+    pub fn notes_and_openings<Values>(
+        seed: &[u8; RNG_SEED],
+        values: Values,
+    ) -> (Vec<u8>, Vec<u8>)
+    where
+        Values: IntoIterator<Item = u64>,
+    {
+        let values: Vec<_> = values.into_iter().collect();
+        let len = values.len();
+        let notes = notes(seed, values);
+        let openings: Vec<_> = (0..len)
+            .map(|_| unsafe { mem::zeroed::<tx::Opening>() })
+            .collect();
+
+        let openings = rkyv::to_bytes::<_, MAX_LEN>(&openings)
+            .expect("failed to serialize openings")
+            .into_vec();
+
+        (notes, openings)
+    }
+
     pub fn raw_notes_and_nulifiers<Values>(
-        seed: &[u8; utils::RNG_SEED],
+        seed: &[u8; RNG_SEED],
         values: Values,
     ) -> Vec<(Note, BlsScalar)>
     where
@@ -408,123 +318,111 @@ mod node {
             })
             .collect()
     }
-
-    pub fn notes<Values>(
-        seed: &[u8; utils::RNG_SEED],
-        values: Values,
-    ) -> Vec<u8>
-    where
-        Values: IntoIterator<Item = u64>,
-    {
-        rkyv::to_bytes::<_, MAX_LEN>(&raw_notes(seed, values))
-            .expect("failed to serialize notes")
-            .into_vec()
-    }
-
-    pub fn notes_and_openings<Values>(
-        seed: &[u8; utils::RNG_SEED],
-        values: Values,
-    ) -> (Vec<u8>, Vec<u8>)
-    where
-        Values: IntoIterator<Item = u64>,
-    {
-        let rng = &mut utils::rng(seed);
-        let notes: Vec<_> = values
-            .into_iter()
-            .map(|value| {
-                let obfuscated = (rng.next_u32() & 1) == 1;
-                let idx = rng.next_u64() % MAX_KEY as u64;
-                let psk = key::derive_ssk(seed, idx).public_spend_key();
-
-                if obfuscated {
-                    let blinder = JubJubScalar::random(rng);
-                    Note::obfuscated(rng, &psk, value, blinder)
-                } else {
-                    Note::transparent(rng, &psk, value)
-                }
-            })
-            .collect();
-
-        let openings: Vec<_> = (0..notes.len())
-            .map(|_| unsafe { mem::zeroed::<tx::Opening>() })
-            .collect();
-
-        let notes = rkyv::to_bytes::<_, MAX_LEN>(&notes)
-            .expect("failed to serialize notes")
-            .into_vec();
-
-        let openings = rkyv::to_bytes::<_, MAX_LEN>(&openings)
-            .expect("failed to serialize openings")
-            .into_vec();
-
-        (notes, openings)
-    }
-
-    pub fn psk(seed: &[u8; utils::RNG_SEED]) -> Vec<u8> {
-        let psk = key::derive_ssk(seed, 0).public_spend_key();
-        rkyv::to_bytes::<_, MAX_LEN>(&psk)
-            .expect("failed to serialize psk")
-            .into_vec()
-    }
-
-    pub fn output(seed: &[u8; utils::RNG_SEED], value: u64) -> Vec<u8> {
-        let rng = &mut utils::rng(seed);
-        let obfuscated = (rng.next_u32() & 1) == 1;
-        let r#type = if obfuscated {
-            NoteType::Obfuscated
-        } else {
-            NoteType::Transparent
-        };
-        let receiver = key::derive_ssk(seed, 1).public_spend_key();
-        let ref_id = rng.next_u64();
-        let output = Some(tx::OutputValue {
-            r#type,
-            value,
-            receiver,
-            ref_id,
-        });
-
-        rkyv::to_bytes::<_, MAX_LEN>(&output)
-            .expect("failed to serialize notes")
-            .into_vec()
-    }
-
-    pub fn empty_call_data() -> Vec<u8> {
-        let call: Option<tx::CallData> = None;
-        rkyv::to_bytes::<_, MAX_LEN>(&call)
-            .expect("failed to serialize call data")
-            .into_vec()
-    }
 }
 
 pub struct Wallet {
     pub store: Store,
     pub module: Module,
-    pub memory: Memory,
-    pub f: HashMap<&'static str, Function>,
+    pub instance: Instance,
+}
+
+pub struct CallResult<'a> {
+    pub status: bool,
+    pub val: u64,
+    pub aux: u64,
+    pub wallet: &'a mut Wallet,
+}
+
+impl<'a> CallResult<'a> {
+    pub fn new(wallet: &'a mut Wallet, value: i64) -> Self {
+        let (status, val, aux) = utils::decompose(value);
+        Self {
+            status,
+            val,
+            aux,
+            wallet,
+        }
+    }
+
+    pub fn take_memory(self) -> Vec<u8> {
+        assert!(self.status);
+
+        let mut bytes = vec![0u8; self.aux as usize];
+
+        self.wallet
+            .instance
+            .exports
+            .get_memory("memory")
+            .unwrap()
+            .view(&self.wallet.store)
+            .read(self.val, &mut bytes)
+            .unwrap();
+
+        self.wallet
+            .instance
+            .exports
+            .get_function("free_mem")
+            .unwrap()
+            .call(
+                &mut self.wallet.store,
+                &[Value::I32(self.val as i32), Value::I32(self.aux as i32)],
+            )
+            .unwrap();
+
+        bytes
+    }
+
+    pub fn take_contents<T>(self) -> T
+    where
+        T: for<'b> Deserialize<'b>,
+    {
+        assert!(self.status);
+        let bytes = self.take_memory();
+        let json = String::from_utf8(bytes).unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
+
+    pub fn take_val(self) -> u64 {
+        assert!(self.status);
+        self.val
+    }
 }
 
 impl Wallet {
-    pub fn call(&mut self, f: &str, args: &[Value]) -> Box<[Value]> {
-        self.f[f]
-            .call(&mut self.store, args)
-            .expect("failed to call module function")
-    }
+    pub fn call<T>(&mut self, f: &str, args: T) -> CallResult
+    where
+        T: Serialize,
+    {
+        let bytes = serde_json::to_string(&args).unwrap();
+        let len = Value::I32(bytes.len() as i32);
+        let ptr = self
+            .instance
+            .exports
+            .get_function("malloc")
+            .unwrap()
+            .call(&mut self.store, &[len.clone()])
+            .unwrap()[0]
+            .unwrap_i32();
 
-    pub fn memory_write(&mut self, ptr: u64, data: &[u8]) {
-        self.memory
+        self.instance
+            .exports
+            .get_memory("memory")
+            .unwrap()
             .view(&self.store)
-            .write(ptr, data)
-            .expect("failed to write memory");
-    }
+            .write(ptr as u64, bytes.as_bytes())
+            .unwrap();
 
-    pub fn memory_read(&self, ptr: u64, len: usize) -> Vec<u8> {
-        let mut bytes = vec![0u8; len];
-        self.memory
-            .view(&self.store)
-            .read(ptr, &mut bytes)
-            .expect("failed to read memory");
-        bytes
+        let ptr = Value::I32(ptr);
+        let result = self
+            .instance
+            .exports
+            .get_function(f)
+            .unwrap()
+            .call(&mut self.store, &[ptr, len])
+            .unwrap()[0]
+            .unwrap_i64();
+
+        CallResult::new(self, result)
     }
 }
 
@@ -542,44 +440,10 @@ impl Default for Wallet {
         let instance = Instance::new(&mut store, &module, &import_object)
             .expect("failed to instanciate the wasm module");
 
-        let memory = instance
-            .exports
-            .get_memory("memory")
-            .expect("failed to get instance memory")
-            .clone();
-
-        fn add_function(
-            map: &mut HashMap<&'static str, Function>,
-            instance: &Instance,
-            name: &'static str,
-        ) {
-            map.insert(
-                name,
-                instance
-                    .exports
-                    .get_function(name)
-                    .expect("failed to import wasm function")
-                    .clone(),
-            );
-        }
-
-        let mut f = HashMap::new();
-
-        add_function(&mut f, &instance, "malloc");
-        add_function(&mut f, &instance, "free_mem");
-        add_function(&mut f, &instance, "seed");
-        add_function(&mut f, &instance, "balance");
-        add_function(&mut f, &instance, "execute");
-        add_function(&mut f, &instance, "merge_notes");
-        add_function(&mut f, &instance, "filter_notes");
-        add_function(&mut f, &instance, "view_keys");
-        add_function(&mut f, &instance, "nullifiers");
-
         Self {
             store,
             module,
-            memory,
-            f,
+            instance,
         }
     }
 }

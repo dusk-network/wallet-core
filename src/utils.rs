@@ -6,17 +6,83 @@
 
 //! Misc utilities required by the library implementation.
 
-use crate::tx;
+use crate::{tx, RNG_SEED};
 
 use alloc::vec::Vec;
+use core::mem;
 
+use dusk_bytes::DeserializableSlice;
+use dusk_pki::PublicSpendKey;
 use phoenix_core::Note;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Length of the seed of the generated rng.
-pub const RNG_SEED: usize = 64;
+/// Composes a `i64` from the provided arguments. This will be returned from the
+/// WASM module functions.
+pub const fn compose(success: bool, ptr: u32, len: u32) -> i64 {
+    let success = (!success) as u64;
+    let ptr = (ptr as u64) << 32;
+    let len = ((len as u64) << 48) >> 32;
+    (success | ptr | len) as i64
+}
+
+/// Decomposes a `i64` into its inner arguments, being:
+///
+/// - status: a boolean indicating the success of the operation
+/// - ptr: a pointer to the underlying data
+/// - len: the length of the underlying data
+pub const fn decompose(result: i64) -> (bool, u64, u64) {
+    let ptr = (result >> 32) as u64;
+    let len = ((result << 32) >> 48) as u64;
+    let success = ((result << 63) >> 63) == 0;
+
+    (success, ptr, len)
+}
+
+/// Takes a JSON string from the memory slice and deserializes it into the
+/// provided type.
+pub fn take_args<T>(args: i32, len: i32) -> Option<T>
+where
+    T: for<'a> Deserialize<'a>,
+{
+    let args = args as *mut u8;
+    let len = len as usize;
+    let args = unsafe { Vec::from_raw_parts(args, len, len) };
+    let args = alloc::string::String::from_utf8(args).ok()?;
+    serde_json::from_str(&args).ok()
+}
+
+/// Sanitizes arbitrary bytes into well-formed seed.
+pub fn sanitize_seed(bytes: Vec<u8>) -> Option<[u8; RNG_SEED]> {
+    (bytes.len() == RNG_SEED).then(|| {
+        let mut seed = [0u8; RNG_SEED];
+        seed.copy_from_slice(&bytes);
+        seed
+    })
+}
+
+/// Fails the operation
+pub const fn fail() -> i64 {
+    compose(false, 0, 0)
+}
+
+/// Converts the provided response into an allocated pointer and returns the
+/// composed success value.
+pub fn into_ptr<T>(response: T) -> i64
+where
+    T: Serialize,
+{
+    let response = serde_json::to_string(&response).unwrap_or_default();
+    let ptr = response.as_ptr() as u32;
+    let len = response.len() as u32;
+    let result = compose(true, ptr, len);
+
+    mem::forget(response);
+
+    result
+}
 
 /// Creates a secure RNG from a seed.
 pub fn rng(seed: &[u8; RNG_SEED]) -> ChaCha12Rng {
@@ -46,6 +112,13 @@ pub fn sanitize_notes(mut notes: Vec<Note>) -> Vec<Note> {
     notes.sort_by_key(|n| n.hash());
     notes.dedup();
     notes
+}
+
+/// Converts a Base58 string into a [PublicSpendKey].
+pub fn bs58_to_psk(psk: &str) -> Option<PublicSpendKey> {
+    // TODO this should be defined in dusk-pki
+    let bytes = bs58::decode(psk).into_vec().ok()?;
+    PublicSpendKey::from_reader(&mut &bytes[..]).ok()
 }
 
 /// Perform a knapsack algorithm to define the notes to be used as input.
@@ -81,6 +154,15 @@ pub fn knapsack(
     let unspent = nodes.split_off(i).into_iter().map(|n| n.0).collect();
 
     Some((unspent, nodes))
+}
+
+#[test]
+fn compose_works() {
+    assert_eq!(decompose(compose(true, 0, 0)), (true, 0, 0));
+    assert_eq!(decompose(compose(false, 0, 0)), (false, 0, 0));
+    assert_eq!(decompose(compose(false, 1, 0)), (false, 1, 0));
+    assert_eq!(decompose(compose(false, 0, 1)), (false, 0, 1));
+    assert_eq!(decompose(compose(false, 4837, 383)), (false, 4837, 383));
 }
 
 #[test]
