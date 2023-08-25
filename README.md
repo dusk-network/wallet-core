@@ -6,6 +6,10 @@
 
 A library for generating and dealing with transactions.
 
+## Requirements
+
+To generate packages, we use [binaryen](https://github.com/WebAssembly/binaryen).
+
 ## Build
 
 To build and test the crate:
