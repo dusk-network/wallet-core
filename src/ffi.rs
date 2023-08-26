@@ -10,8 +10,7 @@ use alloc::{vec, vec::Vec};
 use core::mem;
 
 use dusk_bytes::Serializable;
-use phoenix_core::note::{ArchivedNote, Note};
-use rkyv::validation::validators::FromBytesError;
+use phoenix_core::Note;
 use sha2::{Digest, Sha512};
 
 use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
@@ -156,7 +155,7 @@ pub fn balance(args: i32, len: i32) -> i64 {
 /// [types::ExecuteArgs].
 ///
 /// Will return a triplet (status, ptr, len) pointing to JSON string
-/// representing [types::ExecuteResult].
+/// representing [types::ExecuteResponse].
 #[no_mangle]
 pub fn execute(args: i32, len: i32) -> i64 {
     let types::ExecuteArgs {
@@ -196,8 +195,10 @@ pub fn execute(args: i32, len: i32) -> i64 {
     };
 
     let value = output.as_ref().map(|o| o.value).unwrap_or(0);
-    let total_output =
-        gas_limit.saturating_mul(gas_price).saturating_add(value);
+    let total_output = gas_limit
+        .saturating_mul(gas_price)
+        .saturating_add(value)
+        .saturating_add(crossover.unwrap_or_default());
 
     let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
     let mut keys_ssk = unsafe { [mem::zeroed(); MAX_KEY + 1] };
@@ -297,33 +298,19 @@ pub fn merge_notes(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let len =
-        3usize.saturating_mul(notes.len()) / mem::size_of::<ArchivedNote>() / 2;
+    let mut list = Vec::with_capacity(10);
+    for notes in notes {
+        if !notes.is_empty() {
+            match rkyv::from_bytes::<Vec<Note>>(&notes) {
+                Ok(n) => list.extend(n),
+                Err(_) => return utils::fail(),
+            };
+        }
+    }
 
-    let notes = match notes
-        .into_iter()
-        .map(|n| rkyv::from_bytes::<Vec<Note>>(&n))
-        .try_fold::<_, _, Result<_, FromBytesError<Vec<Note>>>>(
-            Vec::with_capacity(len),
-            |mut set, notes| {
-                set.extend(notes?);
-                Ok(utils::sanitize_notes(set))
-            },
-        ) {
-        Ok(n) => n,
-        Err(_) => return utils::fail(),
-    };
+    let notes = utils::sanitize_notes(list);
 
-    let notes = match rkyv::to_bytes::<_, MAX_LEN>(&notes) {
-        Ok(n) => n.into_vec(),
-        Err(_) => return utils::fail(),
-    };
-
-    let ptr = notes.as_ptr() as u32;
-    let len = notes.len() as u32;
-
-    mem::forget(notes);
-    utils::compose(true, ptr, len)
+    utils::rkyv_into_ptr(notes)
 }
 
 /// Filters a list of notes from a list of negative flags. The flags that are
@@ -354,16 +341,7 @@ pub fn filter_notes(args: i32, len: i32) -> i64 {
         .collect();
 
     let notes = utils::sanitize_notes(notes);
-    let notes = match rkyv::to_bytes::<_, MAX_LEN>(&notes) {
-        Ok(n) => n.into_vec(),
-        Err(_) => return utils::fail(),
-    };
-
-    let ptr = notes.as_ptr() as u32;
-    let len = notes.len() as u32;
-
-    mem::forget(notes);
-    utils::compose(true, ptr, len)
+    utils::rkyv_into_ptr(notes)
 }
 
 /// Returns a list of [ViewKey] that belongs to this wallet.
@@ -389,16 +367,7 @@ pub fn view_keys(args: i32, len: i32) -> i64 {
         .map(|idx| key::derive_vk(&seed, idx as u64))
         .collect();
 
-    let vks = match rkyv::to_bytes::<_, MAX_LEN>(&vks) {
-        Ok(k) => k.into_vec(),
-        Err(_) => return utils::fail(),
-    };
-
-    let ptr = vks.as_ptr() as u32;
-    let len = vks.len() as u32;
-
-    mem::forget(vks);
-    utils::compose(true, ptr, len)
+    utils::rkyv_into_ptr(vks)
 }
 
 /// Returns a list of [BlsScalar] nullifiers for the given [Vec<Note>] combined
@@ -451,14 +420,5 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
         return utils::fail();
     }
 
-    let nullifiers = match rkyv::to_bytes::<_, MAX_LEN>(&nullifiers) {
-        Ok(n) => n.into_vec(),
-        Err(_) => return utils::fail(),
-    };
-
-    let ptr = nullifiers.as_ptr() as u32;
-    let len = nullifiers.len() as u32;
-
-    mem::forget(nullifiers);
-    utils::compose(true, ptr, len)
+    utils::rkyv_into_ptr(nullifiers)
 }

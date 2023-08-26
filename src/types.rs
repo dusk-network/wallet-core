@@ -93,7 +93,7 @@ pub struct ExecuteResponse {
 pub struct FilterNotesArgs {
     #[doc = " Boolean flags to be negative filtered"]
     pub flags: Vec<bool>,
-    #[doc = " Rkyv serialized notes to be filtered"]
+    #[doc = " A rkyv serialized [Vec<phoenix_core::Note>] to be filtered"]
     pub notes: Vec<u8>,
 }
 #[doc = " The arguments of the merge_notes function"]
@@ -105,7 +105,7 @@ pub struct MergeNotesArgs {
 #[doc = " The arguments of the nullifiers function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct NullifiersArgs {
-    #[doc = " Rkyv serialized notes to have nullifiers generated"]
+    #[doc = " A rkyv serialized [Vec<phoenix_core::Note>] to have nullifiers generated"]
     pub notes: Vec<u8>,
     #[doc = " Seed used to derive the keys of the wallet"]
     pub seed: Vec<u8>,

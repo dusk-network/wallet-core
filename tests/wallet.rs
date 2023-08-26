@@ -147,7 +147,8 @@ fn merge_notes_works() {
     let notes1 = rkyv::to_bytes::<_, MAX_LEN>(&notes1).unwrap().into_vec();
     let notes2 = rkyv::to_bytes::<_, MAX_LEN>(&notes2).unwrap().into_vec();
     let notes3 = rkyv::to_bytes::<_, MAX_LEN>(&notes3).unwrap().into_vec();
-    let notes = vec![notes1, notes2, notes3];
+    let notes4 = vec![];
+    let notes = vec![notes1, notes2, notes3, notes4];
 
     let mut wallet = Wallet::default();
 

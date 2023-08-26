@@ -187,7 +187,7 @@ impl UnprovenTransaction {
                 r#type, &r, nonce, &receiver, value, blinder,
             );
 
-            output_notes.push(note.clone());
+            output_notes.push(note);
             outputs_values.push(Output {
                 note,
                 value,

@@ -6,7 +6,7 @@
 
 //! Misc utilities required by the library implementation.
 
-use crate::{tx, RNG_SEED};
+use crate::{tx, MAX_LEN, RNG_SEED};
 
 use alloc::vec::Vec;
 use core::mem;
@@ -82,6 +82,23 @@ where
     mem::forget(response);
 
     result
+}
+
+/// Returns the provided bytes as a pointer
+pub fn rkyv_into_ptr<T>(value: T) -> i64
+where
+    T: rkyv::Serialize<rkyv::ser::serializers::AllocSerializer<MAX_LEN>>,
+{
+    let bytes = match rkyv::to_bytes(&value) {
+        Ok(t) => t.into_vec(),
+        Err(_) => return fail(),
+    };
+
+    let ptr = bytes.as_ptr() as u32;
+    let len = bytes.len() as u32;
+
+    mem::forget(bytes);
+    compose(true, ptr, len)
 }
 
 /// Creates a secure RNG from a seed.
