@@ -18,7 +18,7 @@ The pointer will be a maximum `u32` number, and the length a `u24` number. The s
 
 Here is an algorithm to split the result into meaningful parts:
 
-```rust
+```rust,ignore
 let ptr = (result >> 32) as u64;
 let len = ((result << 32) >> 48) as u64;
 let success = ((result << 63) >> 63) == 0;
