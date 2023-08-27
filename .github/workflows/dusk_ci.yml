@@ -64,6 +64,9 @@ jobs:
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
+      - make Prepare stdlib
+        run: rustup component add rust-src --toolchain nightly-2023-05-22-x86_64-unknown-linux-gnu
+
       - run: make package
 
       - name: Set up node
