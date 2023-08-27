@@ -4,10 +4,15 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
-use std::fs;
+use std::{fs, env};
 use std::path::PathBuf;
 
 fn main() {
+    if env::var("GITHUB_ACTIONS").is_ok() {
+        // CI doesn't build with schemafy deterministically
+        return ();
+    }
+
     println!("cargo:rerun-if-changed=assets/schema.json");
 
     let schema = PathBuf::from("assets/schema.json").canonicalize().unwrap();
