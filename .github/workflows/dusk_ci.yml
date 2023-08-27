@@ -132,30 +132,26 @@ jobs:
 
       - run: make test
 
-#      - name: Install kcov
-#        if: ${{ matrix.os == 'ubuntu-latest' && matrix.toolchain == 'nightly' }}
-#        run: sudo apt install -y kcov
-#
-#      - name: Build test executable
-#        if: ${{ matrix.os == 'ubuntu-latest' && matrix.toolchain == 'nightly' }}
-#        uses: actions-rs/cargo@v1
-#        env:
-#          RUSTFLAGS: '-Cdebuginfo=2 -Cinline-threshold=0 -Clink-dead-code'
-#          RUSTDOCFLAGS: '-Cdebuginfo=2 -Cinline-threshold=0 -Clink-dead-code'
-#        with:
-#          command: test
-#          args: --no-run
-#
-#      - name: Test with kcov
-#        if: ${{ matrix.os == 'ubuntu-latest' && matrix.toolchain == 'nightly' }}
-#        # Find every executable resulting from building the tests and run each
-#        # one of them with kcov. This ensures all the code we cover is measured.
-#        run: >
-#          find target/debug/deps -type f -executable ! -name "*.*" |
-#          xargs -n1 kcov --exclude-pattern=tests/,/.cargo,/usr/lib --verify target/cov
-#
-#      - name: Upload coverage
-#        if: ${{ matrix.os == 'ubuntu-latest' && matrix.toolchain == 'nightly' }}
-#        uses: codecov/codecov-action@v1.0.2
-#        with:
-#          token: ${{secrets.CODECOV_TOKEN}}
+      - name: Install kcov
+        run: sudo apt install -y kcov
+
+      - name: Build test executable
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTFLAGS: '-Cdebuginfo=2 -Cinline-threshold=0 -Clink-dead-code'
+          RUSTDOCFLAGS: '-Cdebuginfo=2 -Cinline-threshold=0 -Clink-dead-code'
+        with:
+          command: test
+          args: --no-run
+
+      - name: Test with kcov
+        # Find every executable resulting from building the tests and run each
+        # one of them with kcov. This ensures all the code we cover is measured.
+        run: >
+          find target/debug/deps -type f -executable ! -name "*.*" |
+          xargs -n1 kcov --exclude-pattern=tests/,/.cargo,/usr/lib --verify target/cov
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v1.0.2
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
