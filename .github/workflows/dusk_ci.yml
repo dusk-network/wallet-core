@@ -133,9 +133,11 @@ jobs:
       - run: make test
 
       - name: Install kcov
+        if: ${{ matrix.os == 'ubuntu-latest' && github.ref == 'refs/heads/main' }}
         run: sudo apt install -y kcov
 
       - name: Build test executable
+        if: ${{ matrix.os == 'ubuntu-latest' && github.ref == 'refs/heads/main' }}
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: '-Cdebuginfo=2 -Cinline-threshold=0 -Clink-dead-code'
@@ -145,6 +147,7 @@ jobs:
           args: --no-run
 
       - name: Test with kcov
+        if: ${{ matrix.os == 'ubuntu-latest' && github.ref == 'refs/heads/main' }}
         # Find every executable resulting from building the tests and run each
         # one of them with kcov. This ensures all the code we cover is measured.
         run: >
@@ -152,6 +155,7 @@ jobs:
           xargs -n1 kcov --exclude-pattern=tests/,/.cargo,/usr/lib --verify target/cov
 
       - name: Upload coverage
+        if: ${{ matrix.os == 'ubuntu-latest' && github.ref == 'refs/heads/main' }}
         uses: codecov/codecov-action@v1.0.2
         with:
           token: ${{secrets.CODECOV_TOKEN}}
