@@ -64,8 +64,11 @@ jobs:
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
-      - run: rustup target add wasm32-unknown-unknown
-      - run: rustup component add rust-src
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
       - run: make wasm
 
       - name: Run cargo check
@@ -125,8 +128,11 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
 
-      - run: rustup target add wasm32-unknown-unknown
-      - run: rustup component add rust-src
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
       - run: make wasm
 
       - name: Run cargo check
