@@ -139,33 +139,6 @@
         }
       }
     },
-    "PublicSpendKeyArgs": {
-      "description": "The arguments of the public_spend_key function",
-      "type": "object",
-      "required": [
-        "idx",
-        "seed"
-      ],
-      "properties": {
-        "idx": {
-          "description": "The index of the public spend key",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "seed": {
-          "description": "Seed used to derive the keys of the wallet",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "uint8",
-            "minimum": 0
-          },
-          "maxItems": 64,
-          "minItems": 64
-        }
-      }
-    },
     "ExecuteArgs": {
       "description": "The arguments of the execute function",
       "type": "object",
@@ -322,6 +295,42 @@
             "type": "integer",
             "format": "uint8",
             "minimum": 0
+          }
+        }
+      }
+    },
+    "PublicSpendKeysArgs": {
+      "description": "The arguments of the public_spend_keys function",
+      "type": "object",
+      "required": [
+        "seed"
+      ],
+      "properties": {
+        "seed": {
+          "description": "Seed used to derive the keys of the wallet",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0
+          },
+          "maxItems": 64,
+          "minItems": 64
+        }
+      }
+    },
+    "PublicSpendKeysResponse": {
+      "description": "The response of the public_spend_keys function",
+      "type": "object",
+      "required": [
+        "keys"
+      ],
+      "properties": {
+        "keys": {
+          "description": "The Base58 public spend keys of the wallet.",
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         }
       }

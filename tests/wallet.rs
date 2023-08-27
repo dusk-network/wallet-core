@@ -8,7 +8,7 @@
 
 use dusk_bytes::Serializable;
 use dusk_pki::PublicSpendKey;
-use dusk_wallet_core::{tx, types, utils, MAX_LEN, RNG_SEED};
+use dusk_wallet_core::{tx, types, utils, MAX_KEY, MAX_LEN, RNG_SEED};
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -46,29 +46,6 @@ fn balance_works() {
 }
 
 #[test]
-fn public_spend_key_works() {
-    let seed = [0xfa; RNG_SEED];
-
-    let mut wallet = Wallet::default();
-
-    let psk = wallet
-        .call(
-            "public_spend_key",
-            json!({
-                "seed": seed.to_vec(),
-                "idx": 3
-            }),
-        )
-        .take_memory();
-
-    let psk = bs58::decode(psk).into_vec().unwrap();
-    let mut psk_array = [0u8; PublicSpendKey::SIZE];
-
-    psk_array.copy_from_slice(&psk);
-    PublicSpendKey::from_bytes(&psk_array).unwrap();
-}
-
-#[test]
 fn execute_works() {
     let seed = [0xfa; RNG_SEED];
     let rng_seed = [0xfb; RNG_SEED];
@@ -76,16 +53,15 @@ fn execute_works() {
 
     let mut wallet = Wallet::default();
 
-    let psk = wallet
+    let types::PublicSpendKeysResponse { keys } = wallet
         .call(
-            "public_spend_key",
+            "public_spend_keys",
             json!({
                 "seed": seed.to_vec(),
-                "idx":5
             }),
         )
-        .take_memory();
-    let psk = String::from_utf8(psk).unwrap();
+        .take_contents();
+    let psk = &keys[0];
 
     let mut contract = ContractId::uninitialized();
     contract.as_bytes_mut().iter_mut().for_each(|b| *b = 0xfa);
@@ -105,7 +81,7 @@ fn execute_works() {
         "openings": openings,
         "output": {
             "note_type": "Transparent",
-            "receiver": psk.clone(),
+            "receiver": psk,
             "ref_id": 15,
             "value": 10,
         },
@@ -181,6 +157,31 @@ fn filter_notes_works() {
     let notes = rkyv::from_bytes::<Vec<phoenix_core::Note>>(&notes).unwrap();
 
     assert_eq!(notes, filtered);
+}
+
+#[test]
+fn public_spend_keys_works() {
+    let seed = [0xfa; RNG_SEED];
+
+    let mut wallet = Wallet::default();
+
+    let types::PublicSpendKeysResponse { keys } = wallet
+        .call(
+            "public_spend_keys",
+            json!({
+                "seed": seed.to_vec(),
+            }),
+        )
+        .take_contents();
+
+    for key in &keys {
+        let key = bs58::decode(key).into_vec().unwrap();
+        let mut key_array = [0u8; PublicSpendKey::SIZE];
+        key_array.copy_from_slice(&key);
+        PublicSpendKey::from_bytes(&key_array).unwrap();
+    }
+
+    assert_eq!(keys.len(), MAX_KEY + 1);
 }
 
 #[test]

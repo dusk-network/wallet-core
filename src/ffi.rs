@@ -60,36 +60,6 @@ pub fn seed(args: i32, len: i32) -> i64 {
     utils::compose(true, ptr, len)
 }
 
-/// Computes the public spend key from the given seed/index pair.
-///
-/// Expects as argument a fat pointer to a JSON string representing
-/// [types::PublicSpendKeyArgs].
-///
-/// Will return a triplet (status, ptr, len) pointing to the Base58
-/// representation of the public spend key.
-#[no_mangle]
-pub fn public_spend_key(args: i32, len: i32) -> i64 {
-    let types::PublicSpendKeyArgs { idx, seed } =
-        match utils::take_args(args, len) {
-            Some(a) => a,
-            None => return utils::fail(),
-        };
-
-    let seed = match utils::sanitize_seed(seed) {
-        Some(s) => s,
-        None => return utils::fail(),
-    };
-
-    let psk = key::derive_psk(&seed, idx);
-    let psk = bs58::encode(psk.to_bytes()).into_string();
-
-    let ptr = psk.as_ptr() as u32;
-    let len = psk.len() as u32;
-
-    mem::forget(psk);
-    utils::compose(true, ptr, len)
-}
-
 /// Computes the total balance of the given notes.
 ///
 /// Expects as argument a fat pointer to a JSON string representing
@@ -342,6 +312,34 @@ pub fn filter_notes(args: i32, len: i32) -> i64 {
 
     let notes = utils::sanitize_notes(notes);
     utils::rkyv_into_ptr(notes)
+}
+
+/// Returns a list of [PublicSpendKey] that belongs to this wallet.
+///
+/// Expects as argument a fat pointer to a JSON string representing
+/// [types::PublicSpendKeysArgs].
+///
+/// Will return a triplet (status, ptr, len) pointing to JSON string
+/// representing [types::PublicSpendKeysResponse].
+#[no_mangle]
+pub fn public_spend_keys(args: i32, len: i32) -> i64 {
+    let types::PublicSpendKeysArgs { seed } = match utils::take_args(args, len)
+    {
+        Some(a) => a,
+        None => return utils::fail(),
+    };
+
+    let seed = match utils::sanitize_seed(seed) {
+        Some(s) => s,
+        None => return utils::fail(),
+    };
+
+    let keys = (0..=MAX_KEY)
+        .map(|idx| key::derive_psk(&seed, idx as u64))
+        .map(|psk| bs58::encode(psk.to_bytes()).into_string())
+        .collect();
+
+    utils::into_ptr(types::PublicSpendKeysResponse { keys })
 }
 
 /// Returns a list of [ViewKey] that belongs to this wallet.

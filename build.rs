@@ -41,7 +41,9 @@ fn main() {
 
 use alloc::vec::Vec;
 use alloc::string::String;
-use serde::{Serialize, Deserialize};"#;
+use serde::{Serialize, Deserialize};
+
+"#;
 
     let contents = header.to_owned() + &contents;
 

@@ -10,9 +10,10 @@
 
 #![allow(missing_docs)]
 
-use alloc::string::String;
 use alloc::vec::Vec;
-use serde::{Deserialize, Serialize};
+use alloc::string::String;
+use serde::{Serialize, Deserialize};
+
 #[doc = " The arguments of the balance function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct BalanceArgs {
@@ -116,13 +117,17 @@ pub enum OutputType {
     Transparent,
     Obfuscated,
 }
-#[doc = " The arguments of the public_spend_key function"]
+#[doc = " The arguments of the public_spend_keys function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct PublicSpendKeyArgs {
-    #[doc = " The index of the public spend key"]
-    pub idx: u64,
+pub struct PublicSpendKeysArgs {
     #[doc = " Seed used to derive the keys of the wallet"]
     pub seed: Vec<u8>,
+}
+#[doc = " The response of the public_spend_keys function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct PublicSpendKeysResponse {
+    #[doc = " The Base58 public spend keys of the wallet."]
+    pub keys: Vec<String>,
 }
 #[doc = " The arguments of the seed function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
