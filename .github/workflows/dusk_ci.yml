@@ -68,6 +68,9 @@ jobs:
         with:
           command: build
 
+      - name: Add rust-src
+        run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+
       - run: make package
 
       - name: Set up node
@@ -115,11 +118,6 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
 
-      - name: Run cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
       - name: Add target WASM
         run: rustup target add wasm32-unknown-unknown
 
@@ -128,6 +126,8 @@ jobs:
         with:
           command: check
           args: --all-targets
+
+      - run: make wasm
 
       - run: make test
 

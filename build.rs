@@ -4,8 +4,8 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
-use std::{fs, env};
 use std::path::PathBuf;
+use std::{env, fs};
 
 fn main() {
     if env::var("GITHUB_ACTIONS").is_ok() {
