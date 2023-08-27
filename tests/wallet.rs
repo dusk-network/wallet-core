@@ -430,9 +430,7 @@ impl Wallet {
 
 impl Default for Wallet {
     fn default() -> Self {
-        const WALLET: &[u8] = include_bytes!(
-            "../target/wasm32-unknown-unknown/release/dusk_wallet_core.wasm"
-        );
+        const WALLET: &[u8] = include_bytes!("../assets/dusk_wallet_core.wasm");
 
         let mut store = Store::default();
         let module =
