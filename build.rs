@@ -25,8 +25,8 @@ fn main() {
     // some limitations of schemafy will not allow it to parse the correct
     // integer type as they incorrectly fallback any integer to `i64`
     let contents = contents.replace("Vec<i64>", "Vec<u8>");
-    let contents = contents.replace("Vec<u64>", "Vec<u8>");
     let contents = contents.replace("i64", "u64");
+    let contents = contents.replace("Vec<u64>", "Vec<u8>");
 
     let header = r#"// This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
