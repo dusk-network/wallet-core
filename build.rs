@@ -39,9 +39,9 @@ fn main() {
 
 #![allow(missing_docs)]
 
-use alloc::vec::Vec;
 use alloc::string::String;
-use serde::{Serialize, Deserialize};
+use alloc::vec::Vec;
+use serde::{Deserialize, Serialize};
 
 "#;
 

@@ -10,9 +10,9 @@
 
 #![allow(missing_docs)]
 
-use alloc::vec::Vec;
 use alloc::string::String;
-use serde::{Serialize, Deserialize};
+use alloc::vec::Vec;
+use serde::{Deserialize, Serialize};
 
 #[doc = " The arguments of the balance function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
