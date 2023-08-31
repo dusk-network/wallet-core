@@ -113,12 +113,16 @@ pub fn rng(seed: &[u8; RNG_SEED]) -> ChaCha12Rng {
 }
 
 /// Creates a secure RNG from a seed with embedded index.
-pub fn rng_with_index(seed: &[u8; RNG_SEED], index: u64) -> ChaCha12Rng {
+pub fn rng_with_index(
+    seed: &[u8; RNG_SEED],
+    index: u64,
+    termination: &[u8],
+) -> ChaCha12Rng {
     let mut hash = Sha256::new();
 
     hash.update(seed);
     hash.update(index.to_le_bytes());
-    hash.update(b"INDEX");
+    hash.update(termination);
 
     let hash = hash.finalize().into();
     ChaCha12Rng::from_seed(hash)
