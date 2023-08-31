@@ -18,7 +18,7 @@ use dusk_pki::{PublicSpendKey, SecretSpendKey, ViewKey};
 /// resulting hash is then used to seed a `ChaCha12` CSPRNG, which is
 /// subsequently used to generate the key.
 pub fn derive_ssk(seed: &[u8; RNG_SEED], index: u64) -> SecretSpendKey {
-    SecretSpendKey::random(&mut utils::rng_with_index(seed, index))
+    SecretSpendKey::random(&mut utils::rng_with_index(seed, index, b"SSK"))
 }
 
 /// Generates a secret key from its seed and index.
@@ -28,7 +28,7 @@ pub fn derive_ssk(seed: &[u8; RNG_SEED], index: u64) -> SecretSpendKey {
 /// resulting hash is then used to seed a `ChaCha12` CSPRNG, which is
 /// subsequently used to generate the key.
 pub fn derive_sk(seed: &[u8; RNG_SEED], index: u64) -> SecretKey {
-    SecretKey::random(&mut utils::rng_with_index(seed, index))
+    SecretKey::random(&mut utils::rng_with_index(seed, index, b"SK"))
 }
 
 /// Generates a public spend key from its seed and index.
