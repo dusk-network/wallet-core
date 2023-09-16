@@ -384,6 +384,80 @@
           "minItems": 64
         }
       }
+    },
+    "RkyvU64": {
+      "description": "A serialized u64 using rkyv",
+      "type": "object",
+      "required": ["value"],
+      "properties": {
+        "value": {
+          "description": "A u64 rust string, representing a valid rust u64 (max: 18446744073709551615)",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      }
+    },
+    "RkyvTreeLeaf": {
+      "description": "The arguments of the balance function",
+      "type": "object",
+      "required": [
+        "bytes"
+      ],
+      "properties": {
+        "bytes": {
+          "description": "Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 632
+          }
+        }
+      }
+    },
+    "RkyvTreeLeafResponse": {
+      "description": "The response of the public_spend_keys function",
+      "type": "object",
+      "required": [
+        "block_height",
+        "note"
+      ],
+      "properties": {
+        "block_height": {
+          "description": "The block height of the note.",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "note": {
+          "description": "Bytes of note at the block_height",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "RkyvNotesArray": {
+      "description": "The arguments of the rkyv_notes_array function",
+      "type": "object",
+      "required": [
+        "notes"
+      ],
+      "properties": {
+        "notes": {
+          "description": "Array of notes which are rkyv serialized",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
+          }
+        }
+      }
     }
   }
 }

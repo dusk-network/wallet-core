@@ -68,6 +68,11 @@ pub const fn fail() -> i64 {
     compose(false, 0, 0)
 }
 
+/// Fails the operation
+pub const fn fail_with() -> i64 {
+    compose(true, 0, 0)
+}
+
 /// Converts the provided response into an allocated pointer and returns the
 /// composed success value.
 pub fn into_ptr<T>(response: T) -> i64

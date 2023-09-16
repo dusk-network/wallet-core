@@ -129,6 +129,32 @@ pub struct PublicSpendKeysResponse {
     #[doc = " The Base58 public spend keys of the wallet."]
     pub keys: Vec<String>,
 }
+#[doc = " The arguments of the rkyv_notes_array function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct RkyvNotesArray {
+    #[doc = " Array of notes which are rkyv serialized"]
+    pub notes: Vec<Vec<u8>>,
+}
+#[doc = " The arguments of the balance function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct RkyvTreeLeaf {
+    #[doc = " Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf"]
+    pub bytes: Vec<u8>,
+}
+#[doc = " The response of the public_spend_keys function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct RkyvTreeLeafResponse {
+    #[doc = " The block height of the note."]
+    pub block_height: u64,
+    #[doc = " Bytes of note at the block_height"]
+    pub note: Vec<u8>,
+}
+#[doc = " A serialized u64 using rkyv"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct RkyvU64 {
+    #[doc = " A u64 rust string, representing a valid rust u64 (max: 18446744073709551615)"]
+    pub value: u64,
+}
 #[doc = " The arguments of the seed function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct SeedArgs {
