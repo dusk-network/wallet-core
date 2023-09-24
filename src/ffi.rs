@@ -68,6 +68,7 @@ pub fn seed(args: i32, len: i32) -> i64 {
 /// Will return a triplet (status, ptr, len) pointing to JSON string
 /// representing [types::BalanceResult].
 #[no_mangle]
+#[allow(clippy::needless_range_loop)]
 pub fn balance(args: i32, len: i32) -> i64 {
     let types::BalanceArgs { notes, seed } = match utils::take_args(args, len) {
         Some(a) => a,

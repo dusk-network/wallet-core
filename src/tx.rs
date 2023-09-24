@@ -138,6 +138,7 @@ impl UnprovenTransaction {
     ///
     /// The transaction can be sent to a prover service and it contains all the
     /// data required to generate a ZK proof of validity.
+    #[allow(clippy::too_many_arguments)]
     pub fn new<'a, Rng, I, O>(
         rng: &mut Rng,
         inputs: I,
