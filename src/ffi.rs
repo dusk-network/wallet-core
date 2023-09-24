@@ -17,7 +17,7 @@ use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
 
 /// Allocates a buffer of `len` bytes on the WASM memory.
 #[no_mangle]
-pub fn malloc(len: i32) -> i32 {
+pub fn allocate(len: i32) -> i32 {
     let bytes = vec![0u8; len as usize];
     let ptr = bytes.as_ptr();
     mem::forget(bytes);
