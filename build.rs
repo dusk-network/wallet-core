@@ -10,7 +10,7 @@ use std::{env, fs};
 fn main() {
     if env::var("GITHUB_ACTIONS").is_ok() {
         // CI doesn't build with schemafy deterministically
-        return ();
+        return;
     }
 
     println!("cargo:rerun-if-changed=assets/schema.json");

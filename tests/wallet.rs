@@ -400,7 +400,7 @@ impl Wallet {
         let ptr = self
             .instance
             .exports
-            .get_function("malloc")
+            .get_function("allocate")
             .unwrap()
             .call(&mut self.store, &[len.clone()])
             .unwrap()[0]
