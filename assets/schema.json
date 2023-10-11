@@ -139,10 +139,45 @@
         }
       }
     },
+    "Crossover": {
+      "description": "The value of the Crossover and the blinder",
+      "type": "object",
+      "required": [
+        "crossover",
+        "blinder",
+        "value"
+      ],
+      "properties": {
+        "crossover": {
+          "description": "The rkyv serialized bytes of the crossover struct",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0
+          }
+        },
+        "blinder": {
+          "description": "The rkyv serialized blinder of the crossover",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0
+          }
+        },
+        "value": {
+          "description": "The value of the crossover",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
     "ExecuteArgs": {
       "description": "The arguments of the execute function",
       "type": "object",
       "required": [
+        "fee",
         "gas_limit",
         "gas_price",
         "inputs",
@@ -157,22 +192,27 @@
           "$ref": "#/definitions/ExecuteCall"
         },
         "crossover": {
-          "description": "The [phoenix_core::Crossover] value",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
+          "description": "The crossover value",
+          "$ref": "#/definitions/Crossover"
+        },
+        "fee": {
+          "description": "A rkyv serialized Fee",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0
+          }
         },
         "gas_limit": {
           "description": "The gas limit of the transaction",
           "type": "integer",
-          "format": "uint64",
-          "minimum": 0
+          "format": "uint64"
         },
         "gas_price": {
           "description": "The gas price per unit for the transaction",
           "type": "integer",
-          "format": "uint64",
-          "minimum": 0
+          "format": "uint64"
         },
         "inputs": {
           "description": "A rkyv serialized [Vec<phoenix_core::Note>] to be used as inputs",
@@ -208,8 +248,8 @@
             "format": "uint8",
             "minimum": 0
           },
-          "maxItems": 64,
-          "minItems": 64
+          "maxItems": 32,
+          "minItems": 32
         },
         "seed": {
           "description": "Seed used to derive the keys of the wallet",

@@ -24,7 +24,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use rusk_abi::hash::Hasher;
 use rusk_abi::{ContractId, POSEIDON_TREE_DEPTH};
 
-use crate::{types, utils};
+use crate::{types, types::Crossover as WasmCrossover, utils};
 
 /// Chosen arity for the Notes tree implementation.
 pub const POSEIDON_TREE_ARITY: usize = 4;
@@ -143,10 +143,8 @@ impl UnprovenTransaction {
         rng: &mut Rng,
         inputs: I,
         outputs: O,
-        refund: String,
-        gas_limit: u64,
-        gas_price: u64,
-        crossover: Option<u64>,
+        fee: Fee,
+        crossover: Option<WasmCrossover>,
         call: Option<types::ExecuteCall>,
     ) -> Option<Self>
     where
@@ -163,7 +161,6 @@ impl UnprovenTransaction {
             .unzip();
 
         let anchor = inputs.first().map(|i| i.opening.root().hash)?;
-        let refund = utils::bs58_to_psk(&refund)?;
 
         let mut output_notes = Vec::with_capacity(4);
         let mut outputs_values = Vec::with_capacity(4);
@@ -222,20 +219,25 @@ impl UnprovenTransaction {
             (c.contract.to_bytes(), c.method.clone(), c.payload.clone())
         });
 
-        let fee = Fee::new(rng, gas_limit, gas_price, &refund);
-
-        let crossover = crossover.map(|crossover| {
-            let blinder = JubJubScalar::random(rng);
-            let (_, crossover_note) =
-                Note::obfuscated(rng, &refund, crossover, blinder)
-                    .try_into()
-                    .expect("Obfuscated notes should always yield crossovers");
-            Crossover {
-                crossover: crossover_note,
-                value: crossover,
-                blinder,
-            }
-        });
+        let crossover = crossover.and_then(
+            |WasmCrossover {
+                 blinder,
+                 crossover,
+                 value,
+             }| {
+                Some({
+                    Crossover {
+                        crossover: rkyv::from_bytes::<PhoenixCrossover>(
+                            &crossover,
+                        )
+                        .ok()?,
+                        value,
+                        blinder: rkyv::from_bytes::<JubJubScalar>(&blinder)
+                            .ok()?,
+                    }
+                })
+            },
+        );
 
         let tx_hash = Transaction::hash_input_bytes_from_components(
             &nullifiers,

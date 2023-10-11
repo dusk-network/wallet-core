@@ -31,18 +31,30 @@ pub struct BalanceResponse {
     #[doc = " Total computed balance"]
     pub value: u64,
 }
+#[doc = " The value of the Crossover and the blinder"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct Crossover {
+    #[doc = " The rkyv serialized blinder of the crossover"]
+    pub blinder: Vec<u8>,
+    #[doc = " The rkyv serialized bytes of the crossover struct"]
+    pub crossover: Vec<u8>,
+    #[doc = " The value of the crossover"]
+    pub value: u64,
+}
 #[doc = " The arguments of the execute function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct ExecuteArgs {
     #[doc = " A call to a contract method"]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub call: Option<ExecuteCall>,
-    #[doc = " The [phoenix_core::Crossover] value"]
+    #[doc = " The crossover value"]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub crossover: Option<u64>,
-    #[doc = " The gas limit of the transaction"]
+    pub crossover: Option<Crossover>,
+    #[doc = " A rkyv serialized Fee"]
+    pub fee: Vec<u8>,
+    #[doc = " gas_limit"]
     pub gas_limit: u64,
-    #[doc = " The gas price per unit for the transaction"]
+    #[doc = " gas_price"]
     pub gas_price: u64,
     #[doc = " A rkyv serialized [Vec<phoenix_core::Note>] to be used as inputs"]
     pub inputs: Vec<u8>,
