@@ -52,9 +52,9 @@ pub struct ExecuteArgs {
     pub crossover: Option<Crossover>,
     #[doc = " A rkyv serialized Fee"]
     pub fee: Vec<u8>,
-    #[doc = " gas_limit"]
+    #[doc = " The gas limit of the transaction"]
     pub gas_limit: u64,
-    #[doc = " gas_price"]
+    #[doc = " The gas price per unit for the transaction"]
     pub gas_price: u64,
     #[doc = " A rkyv serialized [Vec<phoenix_core::Note>] to be used as inputs"]
     pub inputs: Vec<u8>,

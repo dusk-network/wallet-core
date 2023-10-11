@@ -7,8 +7,16 @@
 //! Wallet library tests.
 
 use dusk_bytes::Serializable;
+use dusk_jubjub::JubJubScalar;
 use dusk_pki::PublicSpendKey;
-use dusk_wallet_core::{tx, types, utils, MAX_KEY, MAX_LEN, RNG_SEED};
+use dusk_wallet_core::{
+    tx,
+    types::{self, Crossover as WasmCrossover},
+    utils, MAX_KEY, MAX_LEN, RNG_SEED,
+};
+use phoenix_core::{Crossover, Fee};
+use rand::rngs::StdRng;
+use rand_core::SeedableRng;
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -48,7 +56,7 @@ fn balance_works() {
 #[test]
 fn execute_works() {
     let seed = [0xfa; RNG_SEED];
-    let rng_seed = [0xfb; RNG_SEED];
+    let rng_seed = [0xfb; 32];
     let values = [10, 250, 15, 7500];
 
     let mut wallet = Wallet::default();
@@ -68,15 +76,38 @@ fn execute_works() {
     let contract = bs58::encode(contract.as_bytes()).into_string();
 
     let (inputs, openings) = node::notes_and_openings(&seed, values);
+    let crossover = Crossover::default();
+    let blinder = JubJubScalar::default();
+
+    let crossover = WasmCrossover {
+        blinder: rkyv::to_bytes::<JubJubScalar, MAX_LEN>(&blinder)
+            .unwrap()
+            .to_vec(),
+        crossover: rkyv::to_bytes::<Crossover, MAX_LEN>(&crossover)
+            .unwrap()
+            .to_vec(),
+        value: 0,
+    };
+
+    let fee = Fee::new(
+        &mut StdRng::from_entropy(),
+        240000,
+        0,
+        &utils::bs58_to_psk(psk).unwrap(),
+    );
+
+    let fee = rkyv::to_bytes::<Fee, MAX_LEN>(&fee).unwrap().to_vec();
+
     let args = json!({
         "call": {
             "contract": contract,
             "method": "commit",
             "payload": b"We lost because we told ourselves we lost.".to_vec(),
         },
-        "crossover": 25,
+        "crossover": crossover,
         "gas_limit": 100,
         "gas_price": 2,
+        "fee": fee,
         "inputs": inputs,
         "openings": openings,
         "output": {
@@ -101,10 +132,10 @@ fn merge_notes_works() {
     let seed = [0xfa; RNG_SEED];
 
     let notes1 = node::raw_notes(&seed, [10, 250, 15, 39, 55]);
-    let notes2 = vec![notes1[1].clone(), notes1[3].clone()];
+    let notes2 = vec![notes1[1], notes1[3]];
     let notes3: Vec<_> = node::raw_notes(&seed, [10, 250, 15, 39, 55])
         .into_iter()
-        .chain([notes1[4].clone()])
+        .chain([notes1[4]])
         .collect();
 
     let notes_unmerged: Vec<_> = notes1
@@ -143,7 +174,7 @@ fn filter_notes_works() {
 
     let notes = node::raw_notes(&seed, [10, 250, 15, 39, 55]);
     let flags = vec![true, true, false, true, false];
-    let filtered = vec![notes[2].clone(), notes[4].clone()];
+    let filtered = vec![notes[2], notes[4]];
     let filtered = utils::sanitize_notes(filtered);
 
     let notes = rkyv::to_bytes::<_, MAX_LEN>(&notes).unwrap().into_vec();
@@ -236,15 +267,16 @@ mod node {
     use core::mem;
 
     use dusk_jubjub::{BlsScalar, JubJubScalar};
-    use dusk_wallet_core::{key, tx, utils, MAX_KEY, MAX_LEN, RNG_SEED};
+    use dusk_wallet_core::{key, tx, MAX_KEY, MAX_LEN, RNG_SEED};
     use phoenix_core::Note;
-    use rand::RngCore;
+    use rand::{rngs::StdRng, RngCore};
+    use rand_core::SeedableRng;
 
     pub fn raw_notes<Values>(seed: &[u8; RNG_SEED], values: Values) -> Vec<Note>
     where
         Values: IntoIterator<Item = u64>,
     {
-        let rng = &mut utils::rng(seed);
+        let rng = &mut StdRng::from_entropy();
         values
             .into_iter()
             .map(|value| {
@@ -299,7 +331,7 @@ mod node {
     where
         Values: IntoIterator<Item = u64>,
     {
-        let rng = &mut utils::rng(seed);
+        let rng = &mut StdRng::from_entropy();
         values
             .into_iter()
             .map(|value| {
