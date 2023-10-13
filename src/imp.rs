@@ -22,6 +22,7 @@ use dusk_pki::{
     StealthAddress,
 };
 use dusk_schnorr::Signature as SchnorrSignature;
+use ff::Field;
 use phoenix_core::transaction::*;
 use phoenix_core::{Error as PhoenixError, Fee, Note, NoteType};
 use rand_core::{CryptoRng, Error as RngError, RngCore};
@@ -301,7 +302,7 @@ where
 
         let mut outputs = vec![];
         if change > 0 {
-            let nonce = BlsScalar::random(rng);
+            let nonce = BlsScalar::random(&mut *rng);
             let (change_note, change_blinder) =
                 generate_obfuscated_note(rng, refund, change, nonce);
 
@@ -649,7 +650,7 @@ where
 
         let withdraw_r = JubJubScalar::random(rng);
         let address = sender_psk.gen_stealth_address(&withdraw_r);
-        let nonce = BlsScalar::random(rng);
+        let nonce = BlsScalar::random(&mut *rng);
 
         let signature = withdraw_sign(&sk, &pk, stake.counter, address, nonce);
 

@@ -15,6 +15,7 @@ use dusk_wallet_core::{
     EnrichedNote, ProverClient, StakeInfo, StateClient, Store, Transaction,
     UnprovenTransaction, Wallet, POSEIDON_TREE_DEPTH,
 };
+use ff::Field;
 use phoenix_core::{Crossover, Fee, Note, NoteType};
 use poseidon_merkle::{Item, Opening as PoseidonOpening, Tree};
 use rand_core::{CryptoRng, RngCore};
@@ -45,7 +46,7 @@ pub fn mock_wallet<Rng: RngCore + CryptoRng>(
     let psk = store.retrieve_ssk(0).unwrap().public_spend_key();
 
     let notes = new_notes(rng, &psk, note_values);
-    let anchor = BlsScalar::random(rng);
+    let anchor = BlsScalar::random(&mut *rng);
     let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
@@ -64,7 +65,7 @@ pub fn mock_canon_wallet<Rng: RngCore + CryptoRng>(
     let psk = store.retrieve_ssk(0).unwrap().public_spend_key();
 
     let notes = new_notes(rng, &psk, note_values);
-    let anchor = BlsScalar::random(rng);
+    let anchor = BlsScalar::random(&mut *rng);
     let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
@@ -85,7 +86,7 @@ pub fn mock_serde_wallet<Rng: RngCore + CryptoRng>(
     let psk = store.retrieve_ssk(0).unwrap().public_spend_key();
 
     let notes = new_notes(rng, &psk, note_values);
-    let anchor = BlsScalar::random(rng);
+    let anchor = BlsScalar::random(&mut *rng);
     let opening = default_opening();
 
     let state = TestStateClient::new(notes, anchor, opening);
