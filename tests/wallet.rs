@@ -11,6 +11,7 @@ mod mock;
 use dusk_bytes::Serializable;
 use dusk_plonk::prelude::BlsScalar;
 use dusk_wallet_core::StakeInfo;
+use ff::Field;
 use mock::{mock_canon_wallet, mock_serde_wallet, mock_wallet};
 
 #[test]

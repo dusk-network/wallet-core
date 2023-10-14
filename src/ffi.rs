@@ -405,11 +405,15 @@ impl StateClient for FfiStateClient {
                 return Err(r);
             }
         }
-        let scalar = BlsScalar::from_bytes(&scalar_buf).map_err(
-            Error::<FfiStore, FfiStateClient, FfiProverClient>::from,
-        )?;
 
-        Ok(scalar)
+        let scalar: Option<BlsScalar> =
+            BlsScalar::from_bytes(&scalar_buf).into();
+        scalar.ok_or(
+            Error::<FfiStore, FfiStateClient, FfiProverClient>::from(
+                dusk_bytes::Error::InvalidData,
+            )
+            .into(),
+        )
     }
 
     fn fetch_existing_nullifiers(

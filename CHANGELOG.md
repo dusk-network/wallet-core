@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `asyncify`ing FFI imports
 - Add `unstake` function to allow unstaking a previously staked amount [#58]
 - Add `fetch_existing_nullifiers` to the `StateClient` [#41]
+- Add `ff` dependency at `0.13`
 
 ### Changed
 
@@ -49,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update `dusk-poseidon` `0.29.1-rc.0` -> `0.30`
 - Update `dusk-plonk` `0.13` -> `0.14`
 - Change `dusk-merkle` dependency to `poseidon-merkle` after merkle crate separation
+- Update `phoenix-core` `0.20.0-rc.0` -> `0.21`
+- Update `dusk-pki` `0.12` -> `0.13`
+- Update `dusk-schnorr` `0.13` -> `0.14`
+- Update `dusk-poseidon` `0.30` -> `0.31`
+- Update `dusk-plonk` `0.14` -> `0.16`
+- Update `dusk-bls12_381-sign` `0.4` -> `0.5`
+- Update `dusk-jubjub` `0.12` -> `0.13`
+- Update `poseidon-merkle` `0.2.1-rc.0` -> `0.3`
+- Update `rusk-abi` `0.10.0-piecrust.0.6` -> `0.11`
 
 ### Fixed
 
