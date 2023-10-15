@@ -97,11 +97,37 @@ pub struct FilterNotesArgs {
     #[doc = " A rkyv serialized [Vec<phoenix_core::Note>] to be filtered"]
     pub notes: Vec<u8>,
 }
+#[doc = " Retrieve the seed bytes from the mnemonic and passphrase"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetMnemonicSeedArgs {
+    #[doc = " The mnemonic string"]
+    pub mnemonic: String,
+    #[doc = " The passphrase tied to that mnemonic"]
+    pub passphrase: String,
+}
+#[doc = " Response of the get_mnemonic_seed function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetMnemonicSeedResponse {
+    #[doc = " Seed bytes from the given passphrase and Mnemonic"]
+    pub mnemonic_seed: Vec<u8>,
+}
 #[doc = " The arguments of the merge_notes function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct MergeNotesArgs {
     #[doc = " All serialized list of notes to be merged"]
     pub notes: Vec<Vec<u8>>,
+}
+#[doc = " The arguments of the mnemonic_new function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct MnemonicNewArgs {
+    #[doc = " Cryptographically secure [u8; 64]"]
+    pub rng_seed: Vec<u8>,
+}
+#[doc = " Response of the new_mnemonic function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct MnewmonicNewResponse {
+    #[doc = " String from the generated mnemonic"]
+    pub mnemonic_string: String,
 }
 #[doc = " The arguments of the nullifiers function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

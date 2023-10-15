@@ -10,12 +10,14 @@
 
 extern crate alloc;
 
+#[cfg(feature = "compat")]
+/// compat module adds compatiblity functions for non rust platforms
+pub mod compat;
 pub mod ffi;
 pub mod key;
 pub mod tx;
 pub mod types;
 pub mod utils;
-
 /// The maximum number of keys (inclusive) to derive when attempting to decrypt
 /// a note.
 pub const MAX_KEY: usize = 24;

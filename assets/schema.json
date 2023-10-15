@@ -458,6 +458,66 @@
           }
         }
       }
+    },
+    "MnemonicNewArgs": {
+      "description": "The arguments of the mnemonic_new function",
+      "type": "object",
+      "required": ["rng_seed"],
+      "properties": {
+        "rng_seed": {
+          "description": "Cryptographically secure [u8; 64]",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maxItems": 64,
+            "minItems": 64
+          }
+        }
+      }
+    },
+    "MnewmonicNewResponse": {
+      "description": "Response of the new_mnemonic function",
+      "type": "object",
+      "required": ["mnemonic_string"],
+      "properties": {
+        "mnemonic_string": {
+          "description": "String from the generated mnemonic",
+          "type": "string"
+        }
+      }
+    },
+    "GetMnemonicSeedArgs": {
+      "description": "Retrieve the seed bytes from the mnemonic and passphrase",
+      "type": "object",
+      "required": ["mnemonic", "passphrase"],
+      "properties": {
+        "mnemonic": {
+          "description": "The mnemonic string",
+          "type": "string"
+        },
+        "passphrase": {
+          "description": "The passphrase tied to that mnemonic",
+          "type": "string"
+        }
+      }
+    },
+    "GetMnemonicSeedResponse": {
+      "description": "Response of the get_mnemonic_seed function",
+      "type": "object",
+      "required": ["mnemonic_seed"],
+      "properties": {
+        "mnemonic_seed": {
+          "description": "Seed bytes from the given passphrase and Mnemonic",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maxItems": 64,
+            "minItems": 64
+          }
+        }
+      }
     }
   }
 }
