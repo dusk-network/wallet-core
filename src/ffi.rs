@@ -17,7 +17,7 @@ use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
 
 /// Allocates a buffer of `len` bytes on the WASM memory.
 #[no_mangle]
-pub fn malloc(len: i32) -> i32 {
+pub fn allocate(len: i32) -> i32 {
     let bytes = vec![0u8; len as usize];
     let ptr = bytes.as_ptr();
     mem::forget(bytes);
@@ -68,6 +68,7 @@ pub fn seed(args: i32, len: i32) -> i64 {
 /// Will return a triplet (status, ptr, len) pointing to JSON string
 /// representing [types::BalanceResult].
 #[no_mangle]
+#[allow(clippy::needless_range_loop)]
 pub fn balance(args: i32, len: i32) -> i64 {
     let types::BalanceArgs { notes, seed } = match utils::take_args(args, len) {
         Some(a) => a,

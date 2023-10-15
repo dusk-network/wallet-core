@@ -151,6 +151,7 @@ pub fn bs58_to_psk(psk: &str) -> Option<PublicSpendKey> {
 ///
 /// Returns a tuple containing (unspent, inputs). `unspent` contains the notes
 /// that are not used.
+#[allow(clippy::type_complexity)]
 pub fn knapsack(
     mut nodes: Vec<(Note, tx::Opening, u64, usize)>,
     target_sum: u64,
@@ -232,13 +233,10 @@ fn knapsack_works() {
     let key = SecretSpendKey::random(rng);
     let blinder = JubJubScalar::random(rng);
     let note3 = Note::obfuscated(rng, &key.public_spend_key(), 300, blinder);
-    let available = vec![
-        (note1.clone(), o, 100, 0),
-        (note2.clone(), o, 500, 1),
-        (note3.clone(), o, 300, 2),
-    ];
+    let available =
+        vec![(note1, o, 100, 0), (note2, o, 500, 1), (note3, o, 300, 2)];
     let unspent = vec![note1];
-    let inputs = vec![(note2.clone(), o, 500, 1), (note3.clone(), o, 300, 2)];
+    let inputs = vec![(note2, o, 500, 1), (note3, o, 300, 2)];
     assert_eq!(knapsack(available, 600), Some((unspent, inputs)));
 
     // multiple inputs, out of balance check
@@ -251,10 +249,7 @@ fn knapsack_works() {
     let key = SecretSpendKey::random(rng);
     let blinder = JubJubScalar::random(rng);
     let note3 = Note::obfuscated(rng, &key.public_spend_key(), 300, blinder);
-    let available = vec![
-        (note1.clone(), o, 100, 0),
-        (note2.clone(), o, 500, 1),
-        (note3.clone(), o, 300, 2),
-    ];
+    let available =
+        vec![(note1, o, 100, 0), (note2, o, 500, 1), (note3, o, 300, 2)];
     assert_eq!(knapsack(available, 901), None);
 }
