@@ -31,6 +31,12 @@ pub struct BalanceResponse {
     #[doc = " Total computed balance"]
     pub value: u64,
 }
+#[doc = " Response of the check_note_validity function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct CheckNoteValidityResponse {
+    #[doc = " An array indicating which public spend key owns which note, given n number of notes"]
+    pub public_spend_key_and_note: Vec<PublicSpendKeysAndNotesType>,
+}
 #[doc = " The arguments of the execute function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct ExecuteArgs {
@@ -142,6 +148,14 @@ pub struct NullifiersArgs {
 pub enum OutputType {
     Transparent,
     Obfuscated,
+}
+#[doc = " Type of the response of the check_note_validity function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct PublicSpendKeysAndNotesType {
+    #[doc = " Array of notes which are rkyv serialized"]
+    pub notes: Vec<u8>,
+    #[doc = " The public spend key as a bs58 formated string"]
+    pub public_spend_key: String,
 }
 #[doc = " The arguments of the public_spend_keys function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

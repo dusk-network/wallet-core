@@ -518,6 +518,39 @@
           }
         }
       }
-    }
+    },
+    "PublicSpendKeysAndNotesType": {
+      "description": "Type of the response of the check_note_validity function",
+      "type": "object",
+      "required": ["public_spend_key", "notes"],
+      "properties": {
+        "public_spend_key": {
+          "description": "The public spend key as a bs58 formated string",
+          "type": "string"
+        },
+        "notes": {
+          "description": "Array of notes which are rkyv serialized",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "CheckNoteValidityResponse": {
+      "description": "Response of the check_note_validity function",
+      "type": "object",
+      "required": ["public_spend_key_and_note"],
+      "properties": {
+        "public_spend_key_and_note": {
+          "description": "An array indicating which public spend key owns which note, given n number of notes",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicSpendKeysAndNotesType"
+          }
+        }
+      }
+    } 
   }
 }

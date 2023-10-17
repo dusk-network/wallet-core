@@ -26,14 +26,14 @@ pub fn new_mnemonic(args: i32, len: i32) -> i64 {
     };
 
     // check if we our seed is secure
-    let bytes_check: [u8; 64] = match rng_seed.try_into().ok() {
+    let bytes_check: [u8; 32] = match rng_seed.try_into().ok() {
         Some(bytes) => bytes,
         None => return utils::fail(),
     };
 
     let mnemonic = match Mnemonic::from_entropy(&bytes_check).ok() {
         Some(m) => m,
-        None => return utils::fail(),
+        None => return utils::fail_with(),
     };
 
     utils::into_ptr(types::MnewmonicNewResponse {

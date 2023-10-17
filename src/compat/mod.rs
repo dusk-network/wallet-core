@@ -4,6 +4,8 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
+/// Helping us with the crypto primitives
+pub mod crypto;
 /// Includes methods to deal with bip39::Mnemonic
 pub mod mnemonic;
 /// Includes functions to rkyv serialize types like phoenix_core and crypto
