@@ -31,11 +31,24 @@ pub struct BalanceResponse {
     #[doc = " Total computed balance"]
     pub value: u64,
 }
-#[doc = " Response of the check_note_validity function"]
+#[doc = " Arguments of the check_note_ownership function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct CheckNoteValidityResponse {
-    #[doc = " An array indicating which public spend key owns which note, given n number of notes"]
-    pub public_spend_key_and_note: Vec<PublicSpendKeysAndNotesType>,
+pub struct CheckNoteOwnershipArgs {
+    #[doc = " A singular note we want to check the validity of"]
+    pub note: Vec<u8>,
+    #[doc = " The seed to generate the view keys from"]
+    pub seed: Vec<u8>,
+}
+#[doc = " Response of check_note_ownership function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct CheckNoteOwnershipResponse {
+    #[doc = " Is the note owned by any of the view keys in the provided seed"]
+    pub is_owned: bool,
+    #[doc = " Nullifier of the note that we were checking the ownership of"]
+    pub nullifier: Vec<u8>,
+    #[doc = " A base 58 encoded public spend key string"]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_spend_key: Option<String>,
 }
 #[doc = " The arguments of the execute function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -103,6 +116,16 @@ pub struct FilterNotesArgs {
     #[doc = " A rkyv serialized [Vec<phoenix_core::Note>] to be filtered"]
     pub notes: Vec<u8>,
 }
+#[doc = " Arguments of the filter_nullifier_note function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct FilterNulifierNotesArgs {
+    #[doc = " The existing nullifiers that are spent as a Vec<BlsScalar>"]
+    pub existing_nullifiers: Vec<u8>,
+    #[doc = " notes we want to check the nullifiers of as a Vec<Note>"]
+    pub notes: Vec<u8>,
+    #[doc = " The seed to generate the view keys from"]
+    pub seed: Vec<u8>,
+}
 #[doc = " Retrieve the seed bytes from the mnemonic and passphrase"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct GetMnemonicSeedArgs {
@@ -135,6 +158,16 @@ pub struct MnewmonicNewResponse {
     #[doc = " String from the generated mnemonic"]
     pub mnemonic_string: String,
 }
+#[doc = " Information about the note"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct NoteInfoType {
+    #[doc = " Singular Note rkyv serialized"]
+    pub note: Vec<u8>,
+    #[doc = " position of the note"]
+    pub pos: u64,
+    #[doc = " public spend key belonging to that note"]
+    pub psk: String,
+}
 #[doc = " The arguments of the nullifiers function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct NullifiersArgs {
@@ -148,6 +181,20 @@ pub struct NullifiersArgs {
 pub enum OutputType {
     Transparent,
     Obfuscated,
+}
+#[doc = " Arguments of the prove_tx function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct ProveTxArgs {
+    #[doc = " The bytes of the proof of the tx"]
+    pub proof: Vec<u8>,
+    #[doc = " The unproven_tx bytes"]
+    pub unproven_tx: Vec<u8>,
+}
+#[doc = " Response of the prove_tx function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct ProveTxResponse {
+    #[doc = " The bytes of the proven transaction ready to be sent to the node"]
+    pub bytes: Vec<u8>,
 }
 #[doc = " Type of the response of the check_note_validity function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -169,11 +216,23 @@ pub struct PublicSpendKeysResponse {
     #[doc = " The Base58 public spend keys of the wallet."]
     pub keys: Vec<String>,
 }
+#[doc = " Arguments of the rkyv_bls_scalar_array function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct RkyvBlsScalarArrayArgs {
+    #[doc = " An array containing rkyv serialized bytes of each bls scalar"]
+    pub bytes: Vec<Vec<u8>>,
+}
 #[doc = " The arguments of the rkyv_notes_array function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct RkyvNotesArray {
     #[doc = " Array of notes which are rkyv serialized"]
     pub notes: Vec<Vec<u8>>,
+}
+#[doc = " Arguments of the rkyv_openings_array function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct RkyvOpeningsArray {
+    #[doc = " Vec containing the rkyv serialized bytes of each openings"]
+    pub openings: Vec<Vec<u8>>,
 }
 #[doc = " The arguments of the balance function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -186,6 +245,8 @@ pub struct RkyvTreeLeaf {
 pub struct RkyvTreeLeafResponse {
     #[doc = " The block height of the note."]
     pub block_height: u64,
+    #[doc = " Last position of the note"]
+    pub last_pos: u64,
     #[doc = " Bytes of note at the block_height"]
     pub note: Vec<u8>,
 }
@@ -200,6 +261,33 @@ pub struct RkyvU64 {
 pub struct SeedArgs {
     #[doc = " An arbitrary sequence of bytes used to generate a secure seed"]
     pub passphrase: Vec<u8>,
+}
+#[doc = " Arguments of the unproven_tx_to_bytes_response"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct UnprovenTxToBytesResponse {
+    #[doc = " Serialied unproven_Tx ready to be sent to the network"]
+    pub serialized: Vec<u8>,
+}
+#[doc = " Arguments of the unspent spent notes response"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct UnpsentSpentNotesResponse {
+    #[doc = " The notes which are spent"]
+    pub spent_notes: Vec<NoteInfoType>,
+    #[doc = " The notes which are not spent yet"]
+    pub unspent_notes: Vec<NoteInfoType>,
+}
+#[doc = " Arguents of the unspent_spent_notes function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct UnspentSpentNotesArgs {
+    #[doc = " The UInt8Array of rkyv serialized nullifiers recieved from the node"]
+    pub existing_nullifiers: Vec<u8>,
+    #[doc = " The Array<UInt8Array> of rkyv serialized notes"]
+    pub notes: Vec<Vec<u8>>,
+    #[doc = " The Array<UInt8Array> of rkyv serialized nullifiers of the note in the same order as the "]
+    #[doc = " notes"]
+    pub nullifiers_of_notes: Vec<Vec<u8>>,
+    #[doc = " Array of bs58 encoded string to be sent with the response of the function"]
+    pub psks: Vec<String>,
 }
 #[doc = " The arguments of the view_keys function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

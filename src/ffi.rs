@@ -142,7 +142,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
         seed,
     } = match utils::take_args(args, len) {
         Some(a) => a,
-        None => return utils::fail(),
+        None => return utils::fail_with(),
     };
 
     let inputs: Vec<Note> = match rkyv::from_bytes(&inputs) {

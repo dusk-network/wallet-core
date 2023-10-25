@@ -49,7 +49,7 @@ where
 {
     let args = args as *mut u8;
     let len = len as usize;
-    let args = unsafe { Vec::from_raw_parts(args, len, len) };
+    let args: Vec<u8> = unsafe { Vec::from_raw_parts(args, len, len) };
     let args = alloc::string::String::from_utf8(args).ok()?;
     serde_json::from_str(&args).ok()
 }

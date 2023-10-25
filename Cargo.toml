@@ -36,6 +36,14 @@ serde = { version = "1.0", default-features = false, features = [
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 sha2 = { version = "^0.10", default-features = false }
 bip39 = { version = "2.0.0", optional = true, default-features = false }
+dusk-plonk = { version = "0.14", default-features = false, features = [
+    "alloc",
+    "rkyv-impl",
+] }
+dusk-poseidon = { version = "0.30", default-features = false, features = [
+    "alloc",
+    "rkyv-impl",
+] }
 
 [features]
 default = ["compat"]
