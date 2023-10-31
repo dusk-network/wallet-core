@@ -140,6 +140,56 @@ pub struct GetMnemonicSeedResponse {
     #[doc = " Seed bytes from the given passphrase and Mnemonic"]
     pub mnemonic_seed: Vec<u8>,
 }
+#[doc = " Get the call data for stakeing"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetStakeCallDataArgs {
+    #[doc = " The seed to generate the sender keys from"]
+    pub seed: Vec<u8>,
+    #[doc = " The signature of the stct proof"]
+    pub signature: Vec<u8>,
+    #[doc = " The stct proof as recieved from the node"]
+    pub spend_proof: Vec<u8>,
+    #[doc = " Index of the address of the staker in the seed"]
+    pub staker_index: u64,
+    #[doc = " The amount of value to stake"]
+    pub value: u64,
+}
+#[doc = " Response of the get_stake_call_data function, send this to the call_data in execute"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetStakeCallDataResponse {
+    #[doc = " The contract to call encoded in bs58 format"]
+    pub contract: String,
+    #[doc = " The method to call on the contract"]
+    pub method: String,
+    #[doc = " The payload of the call"]
+    pub payload: Vec<u8>,
+}
+#[doc = " Get the bytes for the stct proof to send to the node"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetStctProofArgs {
+    #[doc = " The gas limit of the transaction"]
+    pub gas_limit: u64,
+    #[doc = " The gas price of the transaction"]
+    pub gas_price: u64,
+    #[doc = " The refund address in base58 format"]
+    pub refund: String,
+    #[doc = " The rng seed to generate the entropy for the notes"]
+    pub rng_seed: Vec<u8>,
+    #[doc = " The seed to generate the sender keys from"]
+    pub seed: Vec<u8>,
+    #[doc = " index of the sender in the seed"]
+    pub sender_index: u64,
+    #[doc = " The amount of value to send"]
+    pub value: u64,
+}
+#[doc = " Response of the get_stct_proof function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetStctProofResponse {
+    #[doc = " The bytes of the stct proof to send to the node"]
+    pub bytes: Vec<u8>,
+    #[doc = " The signature of the stct proof"]
+    pub signature: Vec<u8>,
+}
 #[doc = " The arguments of the merge_notes function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct MergeNotesArgs {

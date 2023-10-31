@@ -798,7 +798,7 @@
         }
       }
     },
-    "getStctProof": {
+    "GetStctProofArgs": {
       "description": "Get the bytes for the stct proof to send to the node",
       "type": "object",
       "required": ["rng_seed", "seed", "refund", "value", "sender_index", "gas_limit", "gas_price"],
@@ -838,6 +838,93 @@
         "gas_price": {
           "description": "The gas price of the transaction",
           "type": "integer"
+        }
+      }
+    },
+    "GetStctProofResponse": {
+      "description": "Response of the get_stct_proof function",
+      "type": "object",
+      "required": ["bytes", "signature"],
+      "properties": {
+        "bytes": {
+          "description": "The bytes of the stct proof to send to the node",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "signature": {
+          "description": "The signature of the stct proof",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "GetStakeCallDataArgs": {
+      "description": "Get the call data for stakeing",
+      "type": "object",
+      "required": ["staker_index", "seed", "spend_proof", "value", "signature"],
+      "properties": {
+        "staker_index": {
+          "description": "Index of the address of the staker in the seed",
+          "type": "integer",
+          "format": "uint8"
+        },
+        "seed": {
+          "description": "The seed to generate the sender keys from",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "spend_proof": {
+          "description": "The stct proof as recieved from the node",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "value": {
+          "description": "The amount of value to stake",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "signature": {
+          "description": "The signature of the stct proof",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "GetStakeCallDataResponse": {
+      "description": "Response of the get_stake_call_data function, send this to the call_data in execute",
+      "type": "object",
+      "required": ["contract", "method", "payload"],
+      "properties": {
+        "contract": {
+          "description": "The contract to call encoded in bs58 format",
+          "type": "string"
+        },
+        "method": {
+          "description": "The method to call on the contract",
+          "type": "string"
+        },
+        "payload": {
+          "description": "The payload of the call",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
         }
       }
     }

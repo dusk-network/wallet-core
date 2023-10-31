@@ -4,16 +4,22 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
+use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Serializable;
-use dusk_jubjub::{BlsScalar, JubJubScalar, JubJubAffine};
-use phoenix_core::{Note, Crossover, Fee, transaction::*};
-use dusk_schnorr::{ Signature};
-use dusk_pki::{Ownable, SecretKey as SchnorrKey};
 use dusk_bytes::Write;
+use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
+use dusk_pki::{Ownable, SecretKey as SchnorrKey};
+use dusk_schnorr::Signature;
+use phoenix_core::{transaction::*, Crossover, Fee, Note};
 
 use alloc::vec::Vec;
 
-use crate::{key::{self, derive_ssk}, types, utils, MAX_KEY, MAX_LEN};
+use crate::{
+    key::{self, derive_sk, derive_ssk},
+    types::{self},
+    utils::{self, bs58_to_psk},
+    MAX_KEY, MAX_LEN,
+};
 
 const STCT_INPUT_SIZE: usize = Fee::SIZE
     + Crossover::SIZE
@@ -143,9 +149,17 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
 
 #[no_mangle]
 pub fn get_stct_proof(args: i32, len: i32) -> i64 {
-    let type::CrossoverFeeArgs { rng_seed, seed, refund, value, sender_index, gas_limit, gas_price } = match utils::take_args(args, len) {
+    let types::GetStctProofArgs {
+        rng_seed,
+        seed,
+        refund,
+        value,
+        sender_index,
+        gas_limit,
+        gas_price,
+    } = match utils::take_args(args, len) {
         Some(a) => a,
-        None => return utils::fail()
+        None => return utils::fail(),
     };
 
     let rng_seed = match utils::sanitize_seed(rng_seed) {
@@ -158,38 +172,40 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-
     let sender = derive_ssk(&seed, sender_index);
+    let refund = match bs58_to_psk(&refund) {
+        Some(a) => a,
+        None => return utils::fail(),
+    };
 
     let rng = &mut utils::rng(&rng_seed);
 
     let blinder = JubJubScalar::random(rng);
-        let note = Note::obfuscated(rng, refund, value, blinder);
-        let (mut fee, crossover) = note
-            .try_into()
-            .expect("Obfuscated notes should always yield crossovers");
+    let note = Note::obfuscated(rng, &refund, value, blinder);
+    let (mut fee, crossover) = note
+        .try_into()
+        .expect("Obfuscated notes should always yield crossovers");
 
-        let contract_id = rusk_abi::STAKE_CONTRACT;
-        let address = rusk_abi::contract_to_scalar(&contract_id);
+    let contract_id = rusk_abi::STAKE_CONTRACT;
+    let address = rusk_abi::contract_to_scalar(&contract_id);
 
-        let contract_id = rusk_abi::contract_to_scalar(&contract_id);
+    let contract_id = rusk_abi::contract_to_scalar(&contract_id);
 
-        let stct_message =
-            stct_signature_message(&crossover, value, contract_id);
-        let stct_message = dusk_poseidon::sponge::hash(&stct_message);
+    let stct_message = stct_signature_message(&crossover, value, contract_id);
+    let stct_message = dusk_poseidon::sponge::hash(&stct_message);
 
-        let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
-        let secret = SchnorrKey::from(sk_r);
+    let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
+    let secret = SchnorrKey::from(sk_r);
 
-        fee.gas_limit = gas_limit;
-        fee.gas_price = gas_price;
+    fee.gas_limit = gas_limit;
+    fee.gas_price = gas_price;
 
-        let stct_signature = Signature::new(&secret, rng, stct_message);
+    let stct_signature = Signature::new(&secret, rng, stct_message);
 
-        fn get_buf(fee: Fee, crossover: Crossover, value: u64, blinder: JubJubScalar, address: BlsScalar, stct_signature: Signature) -> Option<[u8; STCT_INPUT_SIZE]> {
-        let mut buf = [0; STCT_INPUT_SIZE];
-        let mut writer = &mut buf[..];
+    let mut buf = [0; STCT_INPUT_SIZE];
+    let mut writer = &mut buf[..];
 
+    let mut bytes = || {
         writer.write(&fee.to_bytes()).ok()?;
         writer.write(&crossover.to_bytes()).ok()?;
         writer.write(&value.to_bytes()).ok()?;
@@ -198,15 +214,59 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
         writer.write(&stct_signature.to_bytes()).ok()?;
 
         Some(buf)
-        }
+    };
 
-        let buf = match get_buf(fee, crossover, value, blinder, address, stct_signature)  {
-            Some(a) => a,
-            None => return utils::fail(),
-        };
+    let bytes = match bytes() {
+        Some(a) => a,
+        None => return utils::fail(),
+    }
+    .to_vec();
 
-        utils::into_ptr(types::CrossoverFeeArgsResponse {
-            buffer: buf
-        })
+    let signature = match rkyv::to_bytes(&stct_signature) {
+        Ok(a) => a.to_vec(),
+        Err(_) => return utils::fail(),
+    };
 
+    utils::into_ptr(types::GetStctProofResponse { bytes, signature })
+}
+
+pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
+    let types::GetStakeCallDataArgs {
+        staker_index,
+        seed,
+        spend_proof,
+        value,
+        signature,
+    } = match utils::take_args(args, len) {
+        Some(a) => a,
+        None => return utils::fail(),
+    };
+
+    let seed = match utils::sanitize_seed(seed) {
+        Some(s) => s,
+        None => return utils::fail(),
+    };
+
+    let sk = derive_sk(&seed, staker_index);
+    let pk = PublicKey::from(&sk);
+
+    let stake = Stake {
+        public_key: pk,
+        signature,
+        value,
+        proof: spend_proof,
+    };
+
+    let contract = bs58::encode(rusk_abi::STAKE_CONTRACT).into_string();
+    let method = "stake";
+    let payload = match rkyv::to_bytes::<_, MAX_LEN>(&stake).ok() {
+        Some(a) => a.to_vec(),
+        None => return utils::fail(),
+    };
+
+    utils::into_ptr(types::GetStakeCallDataResponse {
+        contract,
+        method,
+        payload,
+    })
 }
