@@ -33,7 +33,7 @@ pub struct BalanceResponse {
 }
 #[doc = " The value of the Crossover and the blinder"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct Crossover {
+pub struct CrossoverType {
     #[doc = " The rkyv serialized blinder of the crossover"]
     pub blinder: Vec<u8>,
     #[doc = " The rkyv serialized bytes of the crossover struct"]
@@ -49,7 +49,7 @@ pub struct ExecuteArgs {
     pub call: Option<ExecuteCall>,
     #[doc = " The crossover value"]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub crossover: Option<Crossover>,
+    pub crossover: Option<CrossoverType>,
     #[doc = " A rkyv serialized Fee"]
     pub fee: Vec<u8>,
     #[doc = " The gas limit of the transaction"]

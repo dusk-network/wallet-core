@@ -11,7 +11,7 @@ use dusk_jubjub::JubJubScalar;
 use dusk_pki::PublicSpendKey;
 use dusk_wallet_core::{
     tx,
-    types::{self, Crossover as WasmCrossover},
+    types::{self, CrossoverType as WasmCrossover},
     utils, MAX_KEY, MAX_LEN, RNG_SEED,
 };
 use phoenix_core::{Crossover, Fee};

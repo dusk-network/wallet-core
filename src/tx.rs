@@ -24,7 +24,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use rusk_abi::hash::Hasher;
 use rusk_abi::{ContractId, POSEIDON_TREE_DEPTH};
 
-use crate::{types, types::Crossover as WasmCrossover, utils};
+use crate::{types, types::CrossoverType, utils};
 
 /// Chosen arity for the Notes tree implementation.
 pub const POSEIDON_TREE_ARITY: usize = 4;
@@ -94,7 +94,7 @@ pub struct Output {
 /// A crossover to a transaction that is yet to be proven.
 #[derive(Debug, Clone, Archive, Serialize, Deserialize)]
 #[archive_attr(derive(CheckBytes))]
-pub struct Crossover {
+pub struct WasmCrossover {
     /// Crossover value to be used in inter-contract calls.
     pub crossover: PhoenixCrossover,
     /// Value of the crossover.
@@ -128,7 +128,7 @@ pub struct UnprovenTransaction {
     /// Fee setup for the transaction.
     pub fee: Fee,
     /// Crossover value for inter-contract calls.
-    pub crossover: Option<Crossover>,
+    pub crossover: Option<WasmCrossover>,
     /// Call data payload for contract calls.
     pub call: Option<CallData>,
 }
@@ -144,7 +144,7 @@ impl UnprovenTransaction {
         inputs: I,
         outputs: O,
         fee: Fee,
-        crossover: Option<WasmCrossover>,
+        crossover: Option<CrossoverType>,
         call: Option<types::ExecuteCall>,
     ) -> Option<Self>
     where
@@ -220,13 +220,13 @@ impl UnprovenTransaction {
         });
 
         let crossover = crossover.and_then(
-            |WasmCrossover {
+            |CrossoverType {
                  blinder,
                  crossover,
                  value,
              }| {
                 Some({
-                    Crossover {
+                    WasmCrossover {
                         crossover: rkyv::from_bytes::<PhoenixCrossover>(
                             &crossover,
                         )

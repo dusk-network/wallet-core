@@ -101,10 +101,9 @@ where
     compose(true, ptr, len)
 }
 
-/// Creates a secure RNG from a seed.
-/// We should keep this above 64 to be secure
-pub fn rng(seed: &[u8; 32]) -> ChaCha12Rng {
-    ChaCha12Rng::from_seed(*seed)
+/// Creates a secure RNG directly a seed.
+pub fn rng(seed: [u8; 32]) -> ChaCha12Rng {
+    ChaCha12Rng::from_seed(seed)
 }
 
 /// Creates a secure RNG from a seed with embedded index.

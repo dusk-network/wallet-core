@@ -139,7 +139,7 @@
         }
       }
     },
-    "Crossover": {
+    "CrossoverType": {
       "description": "The value of the Crossover and the blinder",
       "type": "object",
       "required": [
@@ -193,7 +193,7 @@
         },
         "crossover": {
           "description": "The crossover value",
-          "$ref": "#/definitions/Crossover"
+          "$ref": "#/definitions/CrossoverType"
         },
         "fee": {
           "description": "A rkyv serialized Fee",

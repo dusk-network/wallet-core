@@ -239,7 +239,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
         outputs.push(o);
     }
 
-    let rng = &mut utils::rng(&rng_seed);
+    let rng = &mut utils::rng(rng_seed);
     let tx = tx::UnprovenTransaction::new(
         rng, inputs, outputs, fee, crossover, call,
     );
@@ -313,7 +313,7 @@ pub fn filter_notes(args: i32, len: i32) -> i64 {
 
     let notes: Vec<_> = notes
         .into_iter()
-        .zip(flags.into_iter())
+        .zip(flags)
         .filter_map(|(n, f)| (!f).then_some(n))
         .collect();
 
