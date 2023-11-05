@@ -11,5 +11,7 @@ pub mod mnemonic;
 /// Includes functions to rkyv serialize types like phoenix_core and crypto
 /// primitives
 pub mod rkyv;
+/// Includes functions to interact with the stake contract
+pub mod stake;
 /// Includes functions to deal with UnprovenTransaction and Transaction
 pub mod tx;

@@ -46,6 +46,7 @@ dusk-poseidon = { version = "0.30", default-features = false, features = [
 ] }
 
 [features]
+# rust platforms can use this module without the compact feature
 default = ["compat"]
 compat = ["dep:bip39"]
 

@@ -50,6 +50,18 @@ pub struct CheckNoteOwnershipResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_spend_key: Option<String>,
 }
+#[doc = " Arguments of the dusk_to_lux function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct DuskToLuxArgs {
+    #[doc = " The amount of dusk to convert to lux"]
+    pub dusk: u64,
+}
+#[doc = " Response of the dusk_to_lux function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct DuskToLuxResponse {
+    #[doc = " The amount of lux that was converted from dusk"]
+    pub lux: f64,
+}
 #[doc = " The arguments of the execute function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct ExecuteArgs {
@@ -187,6 +199,8 @@ pub struct GetStctProofArgs {
 pub struct GetStctProofResponse {
     #[doc = " The bytes of the stct proof to send to the node"]
     pub bytes: Vec<u8>,
+    #[doc = " The crossover value of the stct proof"]
+    pub crossover: Vec<u8>,
     #[doc = " The signature of the stct proof"]
     pub signature: Vec<u8>,
 }

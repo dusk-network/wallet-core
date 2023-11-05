@@ -4,32 +4,18 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
-use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Serializable;
-use dusk_bytes::Write;
-use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_pki::{Ownable, SecretKey as SchnorrKey};
-use dusk_schnorr::Signature;
-use phoenix_core::{transaction::*, Crossover, Fee, Note};
+use dusk_jubjub::BlsScalar;
+use phoenix_core::Note;
 
 use alloc::vec::Vec;
 
 use crate::{
-    key::{self, derive_sk, derive_ssk},
+    key::{self},
     types::{self},
-    utils::{self, bs58_to_psk},
+    utils::{self},
     MAX_KEY, MAX_LEN,
 };
-
-const STCT_INPUT_SIZE: usize = Fee::SIZE
-    + Crossover::SIZE
-    + u64::SIZE
-    + JubJubScalar::SIZE
-    + BlsScalar::SIZE
-    + Signature::SIZE;
-
-const WFCT_INPUT_SIZE: usize =
-    JubJubAffine::SIZE + u64::SIZE + JubJubScalar::SIZE;
 
 /// Returns true or false if the note is owned by the index
 /// if its true then nullifier of that note if sent with it
@@ -147,126 +133,29 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
     })
 }
 
+/// Convert dusk to lux to send to methods
 #[no_mangle]
-pub fn get_stct_proof(args: i32, len: i32) -> i64 {
-    let types::GetStctProofArgs {
-        rng_seed,
-        seed,
-        refund,
-        value,
-        sender_index,
-        gas_limit,
-        gas_price,
-    } = match utils::take_args(args, len) {
+fn dusk_to_lux(args: i32, len: i32) -> i64 {
+    let types::DuskToLuxArgs { dusk } = match utils::take_args(args, len) {
         Some(a) => a,
         None => return utils::fail(),
     };
 
-    let rng_seed = match utils::sanitize_seed(rng_seed) {
-        Some(s) => s,
-        None => return utils::fail(),
-    };
-
-    let seed = match utils::sanitize_seed(seed) {
-        Some(s) => s,
-        None => return utils::fail(),
-    };
-
-    let sender = derive_ssk(&seed, sender_index);
-    let refund = match bs58_to_psk(&refund) {
-        Some(a) => a,
-        None => return utils::fail(),
-    };
-
-    let rng = &mut utils::rng(&rng_seed);
-
-    let blinder = JubJubScalar::random(rng);
-    let note = Note::obfuscated(rng, &refund, value, blinder);
-    let (mut fee, crossover) = note
-        .try_into()
-        .expect("Obfuscated notes should always yield crossovers");
-
-    let contract_id = rusk_abi::STAKE_CONTRACT;
-    let address = rusk_abi::contract_to_scalar(&contract_id);
-
-    let contract_id = rusk_abi::contract_to_scalar(&contract_id);
-
-    let stct_message = stct_signature_message(&crossover, value, contract_id);
-    let stct_message = dusk_poseidon::sponge::hash(&stct_message);
-
-    let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
-    let secret = SchnorrKey::from(sk_r);
-
-    fee.gas_limit = gas_limit;
-    fee.gas_price = gas_price;
-
-    let stct_signature = Signature::new(&secret, rng, stct_message);
-
-    let mut buf = [0; STCT_INPUT_SIZE];
-    let mut writer = &mut buf[..];
-
-    let mut bytes = || {
-        writer.write(&fee.to_bytes()).ok()?;
-        writer.write(&crossover.to_bytes()).ok()?;
-        writer.write(&value.to_bytes()).ok()?;
-        writer.write(&blinder.to_bytes()).ok()?;
-        writer.write(&address.to_bytes()).ok()?;
-        writer.write(&stct_signature.to_bytes()).ok()?;
-
-        Some(buf)
-    };
-
-    let bytes = match bytes() {
-        Some(a) => a,
-        None => return utils::fail(),
-    }
-    .to_vec();
-
-    let signature = match rkyv::to_bytes(&stct_signature) {
-        Ok(a) => a.to_vec(),
-        Err(_) => return utils::fail(),
-    };
-
-    utils::into_ptr(types::GetStctProofResponse { bytes, signature })
+    utils::into_ptr(types::DuskToLuxResponse {
+        lux: rusk_abi::dusk::from_dusk(dusk),
+    })
 }
 
-pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
-    let types::GetStakeCallDataArgs {
-        staker_index,
-        seed,
-        spend_proof,
-        value,
-        signature,
-    } = match utils::take_args(args, len) {
+/// Convert lux to dusk
+#[no_mangle]
+fn lux_to_dusk(args: i32, len: i32) -> i64 {
+    // reusing the type from above, two less type definitions
+    let types::DuskToLuxResponse { lux } = match utils::take_args(args, len) {
         Some(a) => a,
         None => return utils::fail(),
     };
 
-    let seed = match utils::sanitize_seed(seed) {
-        Some(s) => s,
-        None => return utils::fail(),
-    };
-
-    let sk = derive_sk(&seed, staker_index);
-    let pk = PublicKey::from(&sk);
-
-    let stake = Stake {
-        public_key: pk,
-        signature,
-        value,
-        proof: spend_proof,
-    };
-
-    let contract = bs58::encode(rusk_abi::STAKE_CONTRACT).into_string();
-    let method = "stake";
-    let payload = match rkyv::to_bytes::<_, MAX_LEN>(&stake).ok() {
-        Some(a) => a.to_vec(),
-        None => return utils::fail(),
-    };
-
-    utils::into_ptr(types::GetStakeCallDataResponse {
-        contract,
-        method,
-        payload,
+    utils::into_ptr(types::DuskToLuxArgs {
+        dusk: rusk_abi::dusk::dusk(lux),
     })
 }

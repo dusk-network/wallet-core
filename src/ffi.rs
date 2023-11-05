@@ -72,7 +72,7 @@ pub fn seed(args: i32, len: i32) -> i64 {
 pub fn balance(args: i32, len: i32) -> i64 {
     let types::BalanceArgs { notes, seed } = match utils::take_args(args, len) {
         Some(a) => a,
-        None => return utils::fail_with(),
+        None => return utils::fail(),
     };
 
     let seed = match utils::sanitize_seed(seed) {
@@ -142,7 +142,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
         seed,
     } = match utils::take_args(args, len) {
         Some(a) => a,
-        None => return utils::fail_with(),
+        None => return utils::fail(),
     };
 
     let inputs: Vec<Note> = match rkyv::from_bytes(&inputs) {
@@ -190,7 +190,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
             if let Ok(value) = input.value(Some(&keys[idx])) {
                 let opening = match openings.next() {
                     Some(o) => o,
-                    None => return utils::fail(),
+                    None => return utils::fail_with(),
                 };
 
                 full_inputs.push((input, opening, value, idx));

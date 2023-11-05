@@ -844,7 +844,7 @@
     "GetStctProofResponse": {
       "description": "Response of the get_stct_proof function",
       "type": "object",
-      "required": ["bytes", "signature"],
+      "required": ["bytes", "signature", "crossover"],
       "properties": {
         "bytes": {
           "description": "The bytes of the stct proof to send to the node",
@@ -856,6 +856,14 @@
         },
         "signature": {
           "description": "The signature of the stct proof",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "crossover": {
+          "description": "The crossover value of the stct proof",
           "type": "array",
           "items": {
             "type": "integer",
@@ -925,6 +933,30 @@
             "type": "integer",
             "format": "uint8"
           }
+        }
+      }
+    },
+    "DuskToLuxArgs": {
+      "description": "Arguments of the dusk_to_lux function",
+      "type": "object",
+      "required": ["dusk"],
+      "properties": {
+        "dusk": {
+          "description": "The amount of dusk to convert to lux",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "DuskToLuxResponse": {
+      "description": "Response of the dusk_to_lux function",
+      "type": "object",
+      "required": ["lux"],
+      "properties": {
+        "lux": {
+          "description": "The amount of lux that was converted from dusk",
+          "type": "number",
+          "format": "double"
         }
       }
     }

@@ -146,7 +146,7 @@ pub fn rkyv_openings_array(args: i32, len: i32) -> i64 {
             None => return utils::fail(),
         };
 
-    let mut openings_vec = Vec::new();
+    let mut openings_vec: Vec<tx::Opening> = Vec::new();
 
     for opening in openings {
         let opening: tx::Opening = match rkyv::from_bytes(&opening).ok() {
@@ -157,5 +157,5 @@ pub fn rkyv_openings_array(args: i32, len: i32) -> i64 {
         openings_vec.push(opening);
     }
 
-    utils::rkyv_into_ptr(openings_vec)
+    utils::rkyv_into_ptr::<Vec<tx::Opening>>(openings_vec)
 }
