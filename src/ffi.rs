@@ -10,7 +10,7 @@ use alloc::{vec, vec::Vec};
 use core::mem;
 
 use dusk_bytes::Serializable;
-use phoenix_core::Note;
+use phoenix_core::{Fee, Note};
 use sha2::{Digest, Sha512};
 
 use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
@@ -132,11 +132,12 @@ pub fn execute(args: i32, len: i32) -> i64 {
     let types::ExecuteArgs {
         call,
         crossover,
-        gas_limit,
-        gas_price,
+        fee,
         inputs,
         openings,
         output,
+        gas_limit,
+        gas_price,
         refund,
         rng_seed,
         seed,
@@ -150,6 +151,11 @@ pub fn execute(args: i32, len: i32) -> i64 {
         Err(_) => return utils::fail(),
     };
 
+    let fee: Fee = match rkyv::from_bytes(&fee) {
+        Ok(n) => n,
+        Err(_) => return utils::fail(),
+    };
+
     let openings: Vec<tx::Opening> = match rkyv::from_bytes(&openings) {
         Ok(n) => n,
         Err(_) => return utils::fail(),
@@ -160,7 +166,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let rng_seed = match utils::sanitize_seed(rng_seed) {
+    let rng_seed: [u8; 32] = match rng_seed.try_into().ok() {
         Some(s) => s,
         None => return utils::fail(),
     };
@@ -169,7 +175,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
     let total_output = gas_limit
         .saturating_mul(gas_price)
         .saturating_add(value)
-        .saturating_add(crossover.unwrap_or_default());
+        .saturating_add(crossover.clone().map(|c| c.value).unwrap_or_default());
 
     let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
     let mut keys_ssk = unsafe { [mem::zeroed(); MAX_KEY + 1] };
@@ -221,9 +227,6 @@ pub fn execute(args: i32, len: i32) -> i64 {
     let total_refund = total_input.saturating_sub(total_output);
 
     let mut outputs = Vec::with_capacity(2);
-    if let Some(o) = output {
-        outputs.push(o);
-    }
     if total_refund > 0 {
         outputs.push(types::ExecuteOutput {
             note_type: types::OutputType::Obfuscated,
@@ -232,10 +235,13 @@ pub fn execute(args: i32, len: i32) -> i64 {
             value: total_refund,
         });
     }
+    if let Some(o) = output {
+        outputs.push(o);
+    }
 
-    let rng = &mut utils::rng(&rng_seed);
+    let rng = &mut utils::rng(rng_seed);
     let tx = tx::UnprovenTransaction::new(
-        rng, inputs, outputs, refund, gas_limit, gas_price, crossover, call,
+        rng, inputs, outputs, fee, crossover, call,
     );
     let tx = match tx {
         Some(t) => t,
@@ -307,7 +313,7 @@ pub fn filter_notes(args: i32, len: i32) -> i64 {
 
     let notes: Vec<_> = notes
         .into_iter()
-        .zip(flags.into_iter())
+        .zip(flags)
         .filter_map(|(n, f)| (!f).then_some(n))
         .collect();
 
