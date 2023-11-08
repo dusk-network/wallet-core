@@ -101,15 +101,9 @@ where
     compose(true, ptr, len)
 }
 
-/// Creates a secure RNG from a seed.
-pub fn rng(seed: &[u8; RNG_SEED]) -> ChaCha12Rng {
-    let mut hash = Sha256::new();
-
-    hash.update(seed);
-    hash.update(b"RNG");
-
-    let hash = hash.finalize().into();
-    ChaCha12Rng::from_seed(hash)
+/// Creates a secure RNG directly a seed.
+pub fn rng(seed: [u8; 32]) -> ChaCha12Rng {
+    ChaCha12Rng::from_seed(seed)
 }
 
 /// Creates a secure RNG from a seed with embedded index.
