@@ -15,3 +15,7 @@ pub mod rkyv;
 pub mod stake;
 /// Includes functions to deal with UnprovenTransaction and Transaction
 pub mod tx;
+// Includes functions to interact with the stake contract unstake tx
+mod unstake;
+// Includes functions to interact with the stake contract allow tx
+mod allow;

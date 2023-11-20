@@ -4,8 +4,8 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
+use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
-use dusk_jubjub::BlsScalar;
 use phoenix_core::Note;
 
 use alloc::vec::Vec;
@@ -26,7 +26,7 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
     let types::CheckNoteOwnershipArgs { note, seed } =
         match utils::take_args(args, len) {
             Some(a) => a,
-            None => return utils::fail_with(),
+            None => return utils::fail(),
         };
 
     let seed = match utils::sanitize_seed(seed) {
@@ -41,7 +41,7 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
 
     let mut is_owned: bool = false;
     let mut nullifier_found = BlsScalar::default();
-    let mut psk_found = None;
+    let mut psk_found: Option<dusk_pki::PublicSpendKey> = None;
 
     for idx in 0..=MAX_KEY {
         let idx = idx as u64;
@@ -117,12 +117,14 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
                 pos: *parsed_note.pos(),
                 psk,
                 note,
+                nullifier,
             });
         } else {
             unspent_notes.push(types::NoteInfoType {
                 pos: *parsed_note.pos(),
                 note,
                 psk,
+                nullifier,
             });
         }
     }

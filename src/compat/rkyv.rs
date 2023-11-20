@@ -5,12 +5,14 @@
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
 use crate::{
+    key::{self},
     tx,
     types::{self},
     utils, MAX_LEN,
 };
 
-use dusk_jubjub::BlsScalar;
+use dusk_bls12_381::BlsScalar;
+use dusk_bls12_381_sign::PublicKey;
 use phoenix_core::{transaction::TreeLeaf, Note};
 
 use alloc::vec::Vec;
@@ -146,16 +148,39 @@ pub fn rkyv_openings_array(args: i32, len: i32) -> i64 {
             None => return utils::fail(),
         };
 
-    let mut openings_vec: Vec<tx::Opening> = Vec::new();
+    let mut openings_vec: Vec<(tx::Opening, u64)> = Vec::new();
 
     for opening in openings {
-        let opening: tx::Opening = match rkyv::from_bytes(&opening).ok() {
-            Some(x) => x,
+        let opening_parsed: tx::Opening =
+            match rkyv::from_bytes(&opening.opening).ok() {
+                Some(x) => x,
+                None => return utils::fail(),
+            };
+
+        openings_vec.push((opening_parsed, opening.pos));
+    }
+
+    utils::rkyv_into_ptr::<Vec<(tx::Opening, u64)>>(openings_vec)
+}
+
+/// Rkyv serialize public key to send to the node to obtain
+/// stake-info
+#[no_mangle]
+fn get_public_key_rkyv_serialized(args: i32, len: i32) -> i64 {
+    let types::GetPublicKeyRkyvSerializedArgs { seed, index } =
+        match utils::take_args(args, len) {
+            Some(a) => a,
             None => return utils::fail(),
         };
 
-        openings_vec.push(opening);
-    }
+    let seed = match utils::sanitize_seed(seed) {
+        Some(s) => s,
+        None => return utils::fail(),
+    };
 
-    utils::rkyv_into_ptr::<Vec<tx::Opening>>(openings_vec)
+    let sk = key::derive_sk(&seed, index);
+
+    let pk = PublicKey::from(&sk);
+
+    utils::rkyv_into_ptr::<PublicKey>(pk)
 }

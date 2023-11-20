@@ -33,7 +33,7 @@ pub fn new_mnemonic(args: i32, len: i32) -> i64 {
 
     let mnemonic = match Mnemonic::from_entropy(&bytes_check).ok() {
         Some(m) => m,
-        None => return utils::fail_with(),
+        None => return utils::fail(),
     };
 
     utils::into_ptr(types::MnewmonicNewResponse {

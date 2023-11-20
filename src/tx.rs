@@ -11,11 +11,11 @@ use alloc::vec::Vec;
 use core::mem;
 
 use bytecheck::CheckBytes;
-use dusk_jubjub::{
-    BlsScalar, JubJubExtended, JubJubScalar, GENERATOR_NUMS_EXTENDED,
-};
+use dusk_bls12_381::BlsScalar;
+use dusk_jubjub::{JubJubExtended, JubJubScalar, GENERATOR_NUMS_EXTENDED};
 use dusk_pki::{Ownable, PublicSpendKey, SecretSpendKey};
 use dusk_schnorr::Proof as SchnorrSig;
+use ff::Field;
 use phoenix_core::{
     Crossover as PhoenixCrossover, Fee, Note, NoteType, Transaction,
 };
@@ -168,7 +168,7 @@ impl UnprovenTransaction {
         for types::ExecuteOutput {
             note_type,
             receiver,
-            ref_id,
+            ref_id: _,
             value,
         } in outputs.into_iter()
         {
@@ -179,7 +179,7 @@ impl UnprovenTransaction {
 
             let r = JubJubScalar::random(rng);
             let blinder = JubJubScalar::random(rng);
-            let nonce = BlsScalar::from(ref_id.unwrap_or_default());
+            let nonce = BlsScalar::random(&mut *rng);
             let receiver = utils::bs58_to_psk(&receiver)?;
             let note = Note::deterministic(
                 r#type, &r, nonce, &receiver, value, blinder,
@@ -264,9 +264,9 @@ impl UnprovenTransaction {
                 )| {
                     let vk = ssk.view_key();
                     let sk_r = ssk.sk_r(note.stealth_address());
-
                     let blinder =
                         note.blinding_factor(Some(&vk)).map_err(|_| ())?;
+
                     let pk_r_prime = GENERATOR_NUMS_EXTENDED * sk_r.as_ref();
                     let sig = SchnorrSig::new(&sk_r, rng, tx_hash);
 

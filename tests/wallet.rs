@@ -43,7 +43,7 @@ fn balance_works() {
         .call(
             "balance",
             json!({
-                "notes": node::notes(&seed, values),
+                "notes": node::notes(&seed, values).0,
                 "seed": seed.to_vec(),
             }),
         )
@@ -109,6 +109,7 @@ fn execute_works() {
         "gas_price": 2,
         "fee": fee,
         "inputs": inputs,
+        "sender_index": 0,
         "openings": openings,
         "output": {
             "note_type": "Transparent",
@@ -120,11 +121,10 @@ fn execute_works() {
         "rng_seed": rng_seed.to_vec(),
         "seed": seed.to_vec()
     });
-    let types::ExecuteResponse { tx, unspent } =
+    let types::ExecuteResponse { tx } =
         wallet.call("execute", args).take_contents();
 
     rkyv::from_bytes::<tx::UnprovenTransaction>(&tx).unwrap();
-    rkyv::from_bytes::<Vec<phoenix_core::Note>>(&unspent).unwrap();
 }
 
 #[test]
@@ -294,13 +294,31 @@ mod node {
             .collect()
     }
 
-    pub fn notes<Values>(seed: &[u8; RNG_SEED], values: Values) -> Vec<u8>
+    pub fn notes<Values>(
+        seed: &[u8; RNG_SEED],
+        values: Values,
+    ) -> (Vec<u8>, Vec<u8>)
     where
         Values: IntoIterator<Item = u64>,
     {
-        rkyv::to_bytes::<_, MAX_LEN>(&raw_notes(seed, values))
-            .expect("failed to serialize notes")
-            .into_vec()
+        let notes = raw_notes(seed, values);
+        let len = notes.len();
+
+        let openings: Vec<_> = (0..len)
+            .zip(notes.clone())
+            .map(|(_, note)| {
+                (unsafe { mem::zeroed::<tx::Opening>() }, *note.pos())
+            })
+            .collect();
+
+        (
+            rkyv::to_bytes::<_, MAX_LEN>(&notes)
+                .expect("failed to serialize notes")
+                .into_vec(),
+            rkyv::to_bytes::<Vec<(tx::Opening, u64)>, MAX_LEN>(&openings)
+                .expect("failed to serialize openings")
+                .into_vec(),
+        )
     }
 
     pub fn notes_and_openings<Values>(
@@ -311,15 +329,8 @@ mod node {
         Values: IntoIterator<Item = u64>,
     {
         let values: Vec<_> = values.into_iter().collect();
-        let len = values.len();
-        let notes = notes(seed, values);
-        let openings: Vec<_> = (0..len)
-            .map(|_| unsafe { mem::zeroed::<tx::Opening>() })
-            .collect();
 
-        let openings = rkyv::to_bytes::<_, MAX_LEN>(&openings)
-            .expect("failed to serialize openings")
-            .into_vec();
+        let (notes, openings) = notes(seed, values);
 
         (notes, openings)
     }

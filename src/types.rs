@@ -50,6 +50,16 @@ pub struct CheckNoteOwnershipResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_spend_key: Option<String>,
 }
+#[doc = " The value of the Crossover and the blinder"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct CrossoverType {
+    #[doc = " The rkyv serialized blinder of the crossover"]
+    pub blinder: Vec<u8>,
+    #[doc = " The rkyv serialized bytes of the crossover struct"]
+    pub crossover: Vec<u8>,
+    #[doc = " The value of the crossover"]
+    pub value: u64,
+}
 #[doc = " Arguments of the dusk_to_lux function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct DuskToLuxArgs {
@@ -68,16 +78,21 @@ pub struct ExecuteArgs {
     #[doc = " A call to a contract method"]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub call: Option<ExecuteCall>,
-    #[doc = " The [phoenix_core::Crossover] value"]
+    #[doc = " The crossover value"]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub crossover: Option<u64>,
+    pub crossover: Option<CrossoverType>,
+    #[doc = " A rkyv serialized Fee"]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee: Option<Vec<u8>>,
     #[doc = " The gas limit of the transaction"]
     pub gas_limit: u64,
     #[doc = " The gas price per unit for the transaction"]
     pub gas_price: u64,
     #[doc = " A rkyv serialized [Vec<phoenix_core::Note>] to be used as inputs"]
     pub inputs: Vec<u8>,
-    #[doc = " A rkyv serialized [Vec<tx::Opening>] to open the inputs to a Merkle root"]
+    #[doc = " A rkyv serialized [Vec<tx::Opening>] to open the inputs to a Merkle root, along with the "]
+    #[doc = " positions of the notes the openings are of in a tuple (opening, position) rkyv serialized, "]
+    #[doc = " see rkyv.rs/rkyv_openings_array"]
     pub openings: Vec<u8>,
     #[doc = " The transfer output note"]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -88,6 +103,8 @@ pub struct ExecuteArgs {
     pub rng_seed: Vec<u8>,
     #[doc = " Seed used to derive the keys of the wallet"]
     pub seed: Vec<u8>,
+    #[doc = " The index of the sender in the seed"]
+    pub sender_index: u64,
 }
 #[doc = " A call to a contract method"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -112,13 +129,11 @@ pub struct ExecuteOutput {
     #[doc = " The value of the output"]
     pub value: u64,
 }
-#[doc = " The response of the execute function"]
+#[doc = " Response of the execute function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct ExecuteResponse {
-    #[doc = " A rkyv serialized [crate::tx::UnspentTransaction]"]
+    #[doc = " The rkyv serialized unproven transaction"]
     pub tx: Vec<u8>,
-    #[doc = " A rkyv serialized [Vec<phoenix_core::Note>] containing the notes that weren't used"]
-    pub unspent: Vec<u8>,
 }
 #[doc = " The arguments of the filter_notes function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -138,6 +153,42 @@ pub struct FilterNulifierNotesArgs {
     #[doc = " The seed to generate the view keys from"]
     pub seed: Vec<u8>,
 }
+#[doc = " Arguments for get_allow_call_data function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetAllowCallDataArgs {
+    #[doc = " Counter value from stakeinfo"]
+    pub counter: u64,
+    #[doc = " gas_limit"]
+    pub gas_limit: u64,
+    #[doc = " gas_price"]
+    pub gas_price: u64,
+    #[doc = " index of the owner of the stake"]
+    pub owner_index: u64,
+    #[doc = " psk in string of who to refund this tx to"]
+    pub refund: String,
+    #[doc = " random rng seed"]
+    pub rng_seed: Vec<u8>,
+    #[doc = " Seed of the wallet"]
+    pub seed: Vec<u8>,
+    #[doc = " index of the sender of the tx"]
+    pub sender_index: u64,
+}
+#[doc = " Response of the get_allow_call_data function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetAllowCallDataResponse {
+    #[doc = " Blinder used to make the crossover"]
+    pub blinder: Vec<u8>,
+    #[doc = " The id of the contract to call in Base58 format"]
+    pub contract: String,
+    #[doc = " Crossover of this tx"]
+    pub crossover: Vec<u8>,
+    #[doc = " The fee of the tx"]
+    pub fee: Vec<u8>,
+    #[doc = " The name of the method to be called"]
+    pub method: String,
+    #[doc = " The payload of the call"]
+    pub payload: Vec<u8>,
+}
 #[doc = " Retrieve the seed bytes from the mnemonic and passphrase"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct GetMnemonicSeedArgs {
@@ -152,13 +203,21 @@ pub struct GetMnemonicSeedResponse {
     #[doc = " Seed bytes from the given passphrase and Mnemonic"]
     pub mnemonic_seed: Vec<u8>,
 }
+#[doc = " Args of the get_public_key_rkyv_serialized function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetPublicKeyRkyvSerializedArgs {
+    #[doc = " The index of the public key to get"]
+    pub index: u64,
+    #[doc = " The seed to generate the sender keys from"]
+    pub seed: Vec<u8>,
+}
 #[doc = " Get the call data for stakeing"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct GetStakeCallDataArgs {
+    #[doc = " The stake counter value"]
+    pub counter: u64,
     #[doc = " The seed to generate the sender keys from"]
     pub seed: Vec<u8>,
-    #[doc = " The signature of the stct proof"]
-    pub signature: Vec<u8>,
     #[doc = " The stct proof as recieved from the node"]
     pub spend_proof: Vec<u8>,
     #[doc = " Index of the address of the staker in the seed"]
@@ -175,6 +234,30 @@ pub struct GetStakeCallDataResponse {
     pub method: String,
     #[doc = " The payload of the call"]
     pub payload: Vec<u8>,
+}
+#[doc = " Args of the get_stake_info function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetStakeInfoArgs {
+    #[doc = " The stake info of the stake obtained from the node"]
+    pub stake_info: Vec<u8>,
+}
+#[doc = " Response of the get_stake_info function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetStakeInfoRespose {
+    #[doc = " amount staked"]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount: Option<u64>,
+    #[doc = " Signature counter to prevent replay"]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub counter: Option<u64>,
+    #[doc = " eligiblity"]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eligiblity: Option<u64>,
+    #[doc = " Has the given address staked"]
+    pub has_staked: bool,
+    #[doc = " Reward for participating in concensus"]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reward: Option<u64>,
 }
 #[doc = " Get the bytes for the stct proof to send to the node"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -197,12 +280,44 @@ pub struct GetStctProofArgs {
 #[doc = " Response of the get_stct_proof function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct GetStctProofResponse {
+    #[doc = " The blinder of the stct proof"]
+    pub blinder: Vec<u8>,
     #[doc = " The bytes of the stct proof to send to the node"]
     pub bytes: Vec<u8>,
     #[doc = " The crossover value of the stct proof"]
     pub crossover: Vec<u8>,
+    #[doc = " The Fee of the crossover note"]
+    pub fee: Vec<u8>,
     #[doc = " The signature of the stct proof"]
     pub signature: Vec<u8>,
+}
+#[doc = " Args of the get_unstake_call_data function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetUnstakeCallDataArgs {
+    #[doc = " The counter of the unstake note"]
+    pub counter: u64,
+    #[doc = " The seed to generate the sender keys from"]
+    pub seed: Vec<u8>,
+    #[doc = " The index of the public key to get"]
+    pub sender_index: u64,
+    #[doc = " The unstake note"]
+    pub unstake_note: Vec<u8>,
+    #[doc = " The unstake proof"]
+    pub unstake_proof: Vec<u8>,
+}
+#[doc = " Response of the get_wfct_proof function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetWfctProofResponse {
+    #[doc = " JubJubScalar Blinder for tx"]
+    pub blinder: Vec<u8>,
+    #[doc = " The bytes of the wfct proof to send to the node"]
+    pub bytes: Vec<u8>,
+    #[doc = " Crossover of the tx"]
+    pub crossover: Vec<u8>,
+    #[doc = " The fee of the tx"]
+    pub fee: Vec<u8>,
+    #[doc = " The unstake note"]
+    pub unstake_note: Vec<u8>,
 }
 #[doc = " The arguments of the merge_notes function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -227,6 +342,8 @@ pub struct MnewmonicNewResponse {
 pub struct NoteInfoType {
     #[doc = " Singular Note rkyv serialized"]
     pub note: Vec<u8>,
+    #[doc = " Nullifier of a Singular Note rkyv serialized"]
+    pub nullifier: Vec<u8>,
     #[doc = " position of the note"]
     pub pos: u64,
     #[doc = " public spend key belonging to that note"]
@@ -239,6 +356,14 @@ pub struct NullifiersArgs {
     pub notes: Vec<u8>,
     #[doc = " Seed used to derive the keys of the wallet"]
     pub seed: Vec<u8>,
+}
+#[doc = " The type represents the Opening and the position of the note, the opening is of"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct OpeningType {
+    #[doc = " The rkyv serialized opening"]
+    pub opening: Vec<u8>,
+    #[doc = " The position of the note the opening is of"]
+    pub pos: u64,
 }
 #[doc = " A note type variant"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -295,8 +420,8 @@ pub struct RkyvNotesArray {
 #[doc = " Arguments of the rkyv_openings_array function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct RkyvOpeningsArray {
-    #[doc = " Vec containing the rkyv serialized bytes of each openings"]
-    pub openings: Vec<Vec<u8>>,
+    #[doc = " Vec containing the rkyv serialized bytes of each openings along with positions"]
+    pub openings: Vec<OpeningType>,
 }
 #[doc = " The arguments of the balance function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

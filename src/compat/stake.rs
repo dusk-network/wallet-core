@@ -15,12 +15,12 @@ use crate::{
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use dusk_bls12_381_sign::PublicKey;
+use dusk_bls12_381::BlsScalar;
+use dusk_bls12_381_sign::{PublicKey, SecretKey, Signature as BlsSignature};
 use dusk_bytes::Serializable;
 use dusk_bytes::Write;
-use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
+use dusk_jubjub::JubJubScalar;
 use dusk_pki::{Ownable, SecretKey as SchnorrKey};
-use dusk_plonk::prelude::*;
 use dusk_plonk::proof_system::Proof;
 use dusk_schnorr::Signature;
 use phoenix_core::{transaction::*, Note, *};
@@ -31,9 +31,6 @@ const STCT_INPUT_SIZE: usize = Fee::SIZE
     + JubJubScalar::SIZE
     + BlsScalar::SIZE
     + Signature::SIZE;
-
-const WFCT_INPUT_SIZE: usize =
-    JubJubAffine::SIZE + u64::SIZE + JubJubScalar::SIZE;
 
 /// Get the bytes to send to the node to prove stct proof
 /// and then we can get the proof verified from the node
@@ -52,7 +49,7 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let rng_seed = match utils::sanitize_seed(rng_seed) {
+    let rng_seed = match utils::sanitize_rng_seed(rng_seed) {
         Some(s) => s,
         None => return utils::fail(),
     };
@@ -68,13 +65,16 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let rng = &mut utils::rng(&rng_seed);
+    let rng = &mut utils::rng(rng_seed);
 
     let blinder = JubJubScalar::random(rng);
     let note = Note::obfuscated(rng, &refund, value, blinder);
     let (mut fee, crossover) = note
         .try_into()
         .expect("Obfuscated notes should always yield crossovers");
+
+    fee.gas_limit = gas_limit;
+    fee.gas_price = gas_price;
 
     let contract_id = rusk_abi::STAKE_CONTRACT;
     let address = rusk_abi::contract_to_scalar(&contract_id);
@@ -87,13 +87,10 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
     let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
     let secret = SchnorrKey::from(sk_r);
 
-    fee.gas_limit = gas_limit;
-    fee.gas_price = gas_price;
-
     let stct_signature = Signature::new(&secret, rng, stct_message);
 
     let vec_allocation = allocate(STCT_INPUT_SIZE as i32) as *mut _;
-    let mut buf = unsafe {
+    let mut buf: Vec<u8> = unsafe {
         Vec::from_raw_parts(vec_allocation, STCT_INPUT_SIZE, STCT_INPUT_SIZE)
     };
 
@@ -112,25 +109,37 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
 
     let bytes = match bytes() {
         Some(_) => buf,
-        None => return utils::fail_with(),
+        None => return utils::fail(),
     }
     .to_vec();
 
     let signature = match rkyv::to_bytes::<Signature, MAX_LEN>(&stct_signature)
     {
         Ok(a) => a.to_vec(),
-        Err(_) => return utils::fail_with(),
+        Err(_) => return utils::fail(),
     };
 
     let crossover = match rkyv::to_bytes::<Crossover, MAX_LEN>(&crossover) {
         Ok(a) => a.to_vec(),
-        Err(_) => return utils::fail_with(),
+        Err(_) => return utils::fail(),
+    };
+
+    let blinder = match rkyv::to_bytes::<JubJubScalar, MAX_LEN>(&blinder) {
+        Ok(a) => a.to_vec(),
+        Err(_) => return utils::fail(),
+    };
+
+    let fee = match rkyv::to_bytes::<Fee, MAX_LEN>(&fee) {
+        Ok(a) => a.to_vec(),
+        Err(_) => return utils::fail(),
     };
 
     utils::into_ptr(types::GetStctProofResponse {
         bytes,
         signature,
         crossover,
+        blinder,
+        fee,
     })
 }
 
@@ -142,7 +151,7 @@ pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
         seed,
         spend_proof,
         value,
-        signature,
+        counter,
     } = match utils::take_args(args, len) {
         Some(a) => a,
         None => return utils::fail(),
@@ -163,19 +172,16 @@ pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let signature = match rkyv::from_bytes(&signature).ok() {
-        Some(a) => a,
-        None => return utils::fail(),
-    };
-
     let sk = derive_sk(&seed, staker_index);
     let pk = PublicKey::from(&sk);
+
+    let signature = stake_sign(&sk, &pk, counter, value);
 
     let stake = Stake {
         public_key: pk,
         signature,
         value,
-        proof: proof,
+        proof,
     };
 
     let contract = bs58::encode(rusk_abi::STAKE_CONTRACT).into_string();
@@ -190,4 +196,65 @@ pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
         method,
         payload,
     })
+}
+
+#[no_mangle]
+fn get_stake_info(args: i32, len: i32) -> i64 {
+    let types::GetStakeInfoArgs { stake_info } =
+        match utils::take_args(args, len) {
+            Some(a) => a,
+            None => return utils::fail(),
+        };
+
+    let mut has_staked = false;
+
+    match rkyv::from_bytes::<StakeData>(&stake_info).ok() {
+        Some(a) => {
+            let (amount, eligiblity) = match a.amount {
+                Some((x, y)) => {
+                    has_staked = true;
+
+                    (Some(x), Some(y))
+                }
+                None => (None, None),
+            };
+            let reward = Some(a.reward);
+            let counter = Some(a.counter);
+
+            utils::into_ptr(types::GetStakeInfoRespose {
+                has_staked,
+                amount,
+                eligiblity,
+                reward,
+                counter,
+            })
+        }
+        None => utils::into_ptr(types::GetStakeInfoRespose {
+            has_staked,
+            amount: None,
+            reward: None,
+            eligiblity: None,
+            counter: None,
+        }),
+    }
+}
+
+/// Creates a signature compatible with what the stake contract expects for a
+/// stake transaction.
+///
+/// The counter is the number of transactions that have been sent to the
+/// transfer contract by a given key, and is reported in `StakeInfo`.
+fn stake_sign(
+    sk: &SecretKey,
+    pk: &PublicKey,
+    counter: u64,
+    value: u64,
+) -> BlsSignature {
+    let size = u64::SIZE + u64::SIZE;
+    let mut msg = Vec::with_capacity(size);
+
+    msg.extend(counter.to_bytes());
+    msg.extend(value.to_bytes());
+
+    sk.sign(pk, &msg)
 }

@@ -30,3 +30,6 @@ pub const RNG_SEED: usize = 64;
 
 /// The length of the allocated response.
 pub const RESPONSE_LEN: usize = 3 * i32::BITS as usize / 8;
+
+/// The maximum number of input notes that are sent with the transaction
+pub const MAX_INPUT_NOTES: usize = 4;

@@ -35,7 +35,9 @@ pub fn unproven_tx_to_bytes(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let serialized = match utx_to_var_bytes(&tx).ok() {
+    let bytes = utx_to_var_bytes(&tx);
+
+    let serialized = match bytes.ok() {
         Some(a) => a.to_vec(),
         None => return utils::fail(),
     };
@@ -56,7 +58,9 @@ pub fn prove_tx(args: i32, len: i32) -> i64 {
     let utx: tx::UnprovenTransaction = match rkyv::from_bytes(&unproven_tx).ok()
     {
         Some(a) => a,
-        None => return utils::fail(),
+        None => {
+            return utils::fail();
+        }
     };
 
     let proof = match Proof::from_slice(&proof).ok() {
@@ -255,15 +259,15 @@ fn input_to_var_bytes(input: &tx::Input) -> Vec<u8> {
         .expect("Rkyv serialization should always succeed for an opening")
         .to_vec();
 
-    let mut bytes = Vec::with_capacity(
-        BlsScalar::SIZE
-            + Note::SIZE
-            + JubJubAffine::SIZE
-            + SchnorrSig::SIZE
-            + u64::SIZE
-            + JubJubScalar::SIZE
-            + opening_bytes.len(),
-    );
+    let size = BlsScalar::SIZE
+        + Note::SIZE
+        + JubJubAffine::SIZE
+        + SchnorrSig::SIZE
+        + u64::SIZE
+        + JubJubScalar::SIZE
+        + opening_bytes.len();
+
+    let mut bytes: Vec<_> = Vec::with_capacity(size);
 
     bytes.extend_from_slice(&input.nullifier.to_bytes());
     bytes.extend_from_slice(&input.note.to_bytes());
