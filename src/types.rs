@@ -253,6 +253,8 @@ pub struct GetStakeInfoRespose {
     #[doc = " eligiblity"]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eligiblity: Option<u64>,
+    #[doc = " True if the key has been authorized to stake"]
+    pub has_key: bool,
     #[doc = " Has the given address staked"]
     pub has_staked: bool,
     #[doc = " Reward for participating in concensus"]

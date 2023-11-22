@@ -1027,7 +1027,7 @@
     "GetStakeInfoRespose": {
       "description": "Response of the get_stake_info function",
       "type": "object",
-      "required": ["has_staked"],
+      "required": ["has_staked", "has_key"],
       "properties": {
         "has_staked": {
           "description": "Has the given address staked",
@@ -1052,6 +1052,10 @@
           "description": "Signature counter to prevent replay",
           "type": "integer",
           "format": "uint64"
+        },
+        "has_key": {
+          "description": "True if the key has been authorized to stake",
+          "type": "boolean"
         }
       }
     },

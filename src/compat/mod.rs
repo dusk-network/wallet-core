@@ -4,6 +4,8 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
+/// Includes functions to interact with the stake contract allow tx
+pub mod allow;
 /// Helping us with the crypto primitives
 pub mod crypto;
 /// Includes methods to deal with bip39::Mnemonic
@@ -15,7 +17,7 @@ pub mod rkyv;
 pub mod stake;
 /// Includes functions to deal with UnprovenTransaction and Transaction
 pub mod tx;
-// Includes functions to interact with the stake contract unstake tx
-mod unstake;
-// Includes functions to interact with the stake contract allow tx
-mod allow;
+/// Includes functions to interact with the stake contract unstake tx
+pub mod unstake;
+/// Includes functions to interact with the stake contract withdraw tx
+pub mod withdraw;

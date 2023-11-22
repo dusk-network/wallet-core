@@ -208,8 +208,8 @@ fn get_stake_info(args: i32, len: i32) -> i64 {
 
     let mut has_staked = false;
 
-    match rkyv::from_bytes::<StakeData>(&stake_info).ok() {
-        Some(a) => {
+    match rkyv::from_bytes::<Option<StakeData>>(&stake_info).ok() {
+        Some(Some(a)) => {
             let (amount, eligiblity) = match a.amount {
                 Some((x, y)) => {
                     has_staked = true;
@@ -227,14 +227,16 @@ fn get_stake_info(args: i32, len: i32) -> i64 {
                 eligiblity,
                 reward,
                 counter,
+                has_key: true,
             })
         }
-        None => utils::into_ptr(types::GetStakeInfoRespose {
+        Some(None) | None => utils::into_ptr(types::GetStakeInfoRespose {
             has_staked,
             amount: None,
             reward: None,
             eligiblity: None,
             counter: None,
+            has_key: false,
         }),
     }
 }
