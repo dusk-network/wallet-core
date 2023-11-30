@@ -726,7 +726,7 @@
     "ProveTxResponse": {
       "description": "Response of the prove_tx function",
       "type": "object",
-      "required": ["bytes"],
+      "required": ["bytes", "hash"],
       "properties": {
         "bytes": {
           "description": "The bytes of the proven transaction ready to be sent to the node",
@@ -735,6 +735,10 @@
             "type": "integer",
             "format": "uint8"
           }
+        },
+        "hash": {
+          "description": "The hash of the proven transaction",
+          "type": "string"
         }
       }
     },

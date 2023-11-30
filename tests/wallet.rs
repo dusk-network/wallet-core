@@ -71,7 +71,7 @@ fn execute_works() {
         .take_contents();
     let psk = &keys[0];
 
-    let mut contract = ContractId::uninitialized();
+    let mut contract: ContractId = ContractId::uninitialized();
     contract.as_bytes_mut().iter_mut().for_each(|b| *b = 0xfa);
     let contract = bs58::encode(contract.as_bytes()).into_string();
 
@@ -89,31 +89,20 @@ fn execute_works() {
         value: 0,
     };
 
-    let fee = Fee::new(
-        &mut StdRng::from_entropy(),
-        240000,
-        0,
-        &utils::bs58_to_psk(psk).unwrap(),
-    );
-
-    let fee = rkyv::to_bytes::<Fee, MAX_LEN>(&fee).unwrap().to_vec();
-
     let args = json!({
         "call": {
             "contract": contract,
             "method": "commit",
             "payload": b"We lost because we told ourselves we lost.".to_vec(),
         },
-        "crossover": crossover,
         "gas_limit": 100,
         "gas_price": 2,
-        "fee": fee,
         "inputs": inputs,
         "sender_index": 0,
         "openings": openings,
         "output": {
-            "note_type": "Transparent",
-            "receiver": psk,
+            "note_type": "Obfuscated",
+            "receiver": &keys[1],
             "ref_id": 15,
             "value": 10,
         },
@@ -121,6 +110,7 @@ fn execute_works() {
         "rng_seed": rng_seed.to_vec(),
         "seed": seed.to_vec()
     });
+
     let types::ExecuteResponse { tx } =
         wallet.call("execute", args).take_contents();
 
@@ -281,8 +271,7 @@ mod node {
             .into_iter()
             .map(|value| {
                 let obfuscated = (rng.next_u32() & 1) == 1;
-                let idx = rng.next_u64() % MAX_KEY as u64;
-                let psk = key::derive_ssk(seed, idx).public_spend_key();
+                let psk = key::derive_ssk(seed, 0).public_spend_key();
 
                 if obfuscated {
                     let blinder = JubJubScalar::random(rng);
@@ -307,7 +296,8 @@ mod node {
         let openings: Vec<_> = (0..len)
             .zip(notes.clone())
             .map(|(_, note)| {
-                (unsafe { mem::zeroed::<tx::Opening>() }, *note.pos())
+                let opening = unsafe { mem::zeroed::<tx::Opening>() };
+                (opening, *note.pos())
             })
             .collect();
 

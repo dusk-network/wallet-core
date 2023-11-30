@@ -100,7 +100,10 @@ pub fn prove_tx(args: i32, len: i32) -> i64 {
 
     let bytes = tx.to_var_bytes();
 
-    utils::into_ptr(types::ProveTxResponse { bytes })
+    let tx_hash = rusk_abi::hash::Hasher::digest(tx.to_hash_input_bytes());
+    let hash = hex::encode(tx_hash.to_bytes());
+
+    utils::into_ptr(types::ProveTxResponse { bytes, hash })
 }
 
 /// Serialize a unprovenTx we recieved from the wallet-core

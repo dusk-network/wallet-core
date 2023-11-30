@@ -154,7 +154,6 @@ pub fn bs58_to_psk(psk: &str) -> Option<PublicSpendKey> {
 }
 
 /// Calculate the inputs for a transaction.
-#[allow(clippy::type_complexity)]
 pub fn inputs(nodes: Vec<Node>, target_sum: u64) -> Option<Vec<Node>> {
     if nodes.is_empty() {
         return None;

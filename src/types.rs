@@ -386,6 +386,8 @@ pub struct ProveTxArgs {
 pub struct ProveTxResponse {
     #[doc = " The bytes of the proven transaction ready to be sent to the node"]
     pub bytes: Vec<u8>,
+    #[doc = " The hash of the proven transaction"]
+    pub hash: String,
 }
 #[doc = " Type of the response of the check_note_validity function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

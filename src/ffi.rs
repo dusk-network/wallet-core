@@ -194,17 +194,16 @@ pub fn execute(args: i32, len: i32) -> i64 {
                     }
                 };
 
-            let blinder: dusk_jubjub::Fr =
-                match input.blinding_factor(Some(&view_key)).ok() {
-                    Some(a) => a,
-                    None => return utils::fail(),
-                };
+            let blinder = match input.blinding_factor(Some(&view_key)).ok() {
+                Some(a) => a,
+                None => return utils::fail(),
+            };
 
             full_inputs.push((input, opening, value, blinder));
             continue 'outer;
         }
 
-        return utils::fail_with();
+        return utils::fail();
     }
 
     // optimizes the inputs given the total amount
