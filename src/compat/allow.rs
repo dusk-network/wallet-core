@@ -41,15 +41,15 @@ pub fn get_allow_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let refund = match utils::bs58_to_psk(&refund) {
+    let refund: dusk_pki::PublicSpendKey = match utils::bs58_to_psk(&refund) {
         Some(a) => a,
         None => return utils::fail(),
     };
 
-    let sk = derive_sk(&seed, sender_index);
+    let sk = derive_sk(&seed, owner_index);
     let staker = PublicKey::from(&sk);
 
-    let owner_sk = derive_sk(&seed, owner_index);
+    let owner_sk = derive_sk(&seed, sender_index);
     let owner_pk = PublicKey::from(&owner_sk);
 
     let rng = &mut utils::rng(rng_seed);
