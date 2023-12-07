@@ -1,9 +1,10 @@
 [package]
 name = "dusk-wallet-core"
-version = "0.21.1"
+version = "0.21.2"
 edition = "2021"
 description = "The core functionality of the Dusk wallet"
 license = "MPL-2.0"
+respository = "https://github.com/dusk-network/wallet-core"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -48,14 +49,13 @@ dusk-poseidon = { version = "0.31", default-features = false, features = [
     "rkyv-impl",
 ] }
 ff = { version = "0.13", default-features = false }
-custom-print = { version = "1.0.0", default-features = false, feature = [
-    "alloc",
-] }
 dusk-bls12_381 = { version = "0.12.3", default-features = false, features = [
     "alloc",
     "rkyv-impl",
 ] }
 hex = { version = "0.4", default_features = false, features = ["alloc"] }
+hashbrown = "0.14.3"
+
 
 [features]
 # rust platforms can use this module without the compact feature

@@ -6,11 +6,15 @@
 
 use crate::{
     ffi::allocate,
+    key::derive_vk,
     tx::{self},
     types, utils,
 };
 
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use dusk_bytes::{
     DeserializableSlice, Error as BytesError, Serializable, Write,
@@ -18,8 +22,9 @@ use dusk_bytes::{
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
 use dusk_plonk::proof_system::Proof;
 use dusk_schnorr::Proof as SchnorrSig;
-use phoenix_core::{transaction, Crossover, Fee, Note};
-use rusk_abi::{ContractId, CONTRACT_ID_BYTES};
+use hashbrown::{hash_map::Entry, HashMap};
+use phoenix_core::{transaction, Crossover, Fee, Note, Transaction};
+use rusk_abi::{hash::Hasher, ContractId, CONTRACT_ID_BYTES};
 
 /// Convert a tx::UnprovenTransaction to bytes ready to be sent to the node
 #[no_mangle]
@@ -104,6 +109,151 @@ pub fn prove_tx(args: i32, len: i32) -> i64 {
     let hash = hex::encode(tx_hash.to_bytes());
 
     utils::into_ptr(types::ProveTxResponse { bytes, hash })
+}
+
+/// Calculate the history given the notes and tx data
+#[no_mangle]
+pub fn get_history(args: i32, len: i32) -> i64 {
+    let types::GetHistoryArgs {
+        seed,
+        index,
+        notes,
+        tx_data,
+    } = match utils::take_args(args, len) {
+        Some(a) => a,
+        None => return utils::fail(),
+    };
+
+    let mut ret: Vec<types::TransactionHistoryType> = Vec::new();
+
+    let seed = match utils::sanitize_seed(seed) {
+        Some(s) => s,
+        None => return utils::fail(),
+    };
+
+    let mut nullifiers = Vec::new();
+
+    for note_data in notes.iter() {
+        let nullifier =
+            match rkyv::from_bytes::<BlsScalar>(&note_data.nullifier) {
+                Ok(a) => a,
+                Err(_) => return utils::fail(),
+            };
+
+        let note = match rkyv::from_bytes::<Note>(&note_data.note).ok() {
+            Some(a) => a,
+            None => return utils::fail(),
+        };
+
+        nullifiers
+            .push((nullifier, note.value(Some(&derive_vk(&seed, index)))));
+    }
+
+    let mut block_txs = HashMap::new();
+    let vk = derive_vk(&seed, index);
+
+    for (index, note_data) in notes.iter().enumerate() {
+        let mut note = match rkyv::from_bytes::<Note>(&note_data.note).ok() {
+            Some(a) => a,
+            None => return utils::fail(),
+        };
+
+        note.set_pos(u64::MAX);
+
+        let note_hash = note.hash();
+
+        let txs = match block_txs.entry(note_data.block_height) {
+            Entry::Occupied(o) => o.into_mut(),
+            Entry::Vacant(v) => {
+                let transactions: Option<Vec<(Transaction, u64)>> = tx_data
+                    [index]
+                    .txs
+                    .iter()
+                    .map(|raw_tx| {
+                        let decoded = hex::decode(&raw_tx.raw_tx).ok()?;
+
+                        let tx = Transaction::from_slice(&decoded).ok()?;
+
+                        Some((tx, raw_tx.gas_spent))
+                    })
+                    .collect();
+
+                let txn = match transactions {
+                    Some(a) => a,
+                    None => return utils::fail(),
+                };
+
+                v.insert(txn)
+            }
+        };
+
+        let note_amount = match note.value(Some(&vk)).ok() {
+            Some(a) => a,
+            None => return utils::fail(),
+        } as f64;
+
+        let note_creator = txs.iter().find(|(t, _)| {
+            t.outputs().iter().any(|&n| n.hash().eq(&note_hash))
+        });
+
+        if let Some((t, gas_spent)) = note_creator {
+            let inputs_amount: Result<Vec<u64>, _> = t
+                .nullifiers()
+                .iter()
+                .filter_map(|input| {
+                    nullifiers
+                        .clone()
+                        .into_iter()
+                        .find_map(|n| n.0.eq(input).then_some(n.1))
+                })
+                .collect();
+
+            let inputs_amount = match inputs_amount {
+                Ok(a) => a.iter().sum::<u64>() as f64,
+                Err(_) => return utils::fail(),
+            };
+
+            let direction = match inputs_amount > 0f64 {
+                true => types::TransactionDirectionType::Out,
+                false => types::TransactionDirectionType::In,
+            };
+            let hash_to_find = Hasher::digest(t.to_hash_input_bytes());
+            match ret.iter_mut().find(|th| th.id == hash_to_find.to_string()) {
+                Some(tx) => tx.amount += note_amount,
+                None => ret.push(types::TransactionHistoryType {
+                    direction,
+                    block_height: note_data.block_height,
+                    amount: note_amount - inputs_amount,
+                    fee: gas_spent * t.fee().gas_price,
+                    id: hash_to_find.to_string(),
+                }),
+            }
+        } else {
+            let outgoing_tx = ret.iter_mut().find(|th| {
+                th.direction == types::TransactionDirectionType::Out
+                    && th.block_height == note_data.block_height
+            });
+
+            if let Some(th) = outgoing_tx {
+                th.amount += note_amount
+            }
+        }
+    }
+
+    ret.sort_by(|a, b| a.block_height.cmp(&b.block_height));
+
+    ret = ret
+        .into_iter()
+        .map(|mut th| {
+            let dusk = th.amount / rusk_abi::dusk::dusk(1.0) as f64;
+
+            th.amount = dusk;
+
+            th
+        })
+        .collect::<Vec<_>>();
+
+    utils::into_ptr(types::GetHistoryResponse { history: ret })
 }
 
 /// Serialize a unprovenTx we recieved from the wallet-core

@@ -189,6 +189,24 @@ pub struct GetAllowCallDataResponse {
     #[doc = " The payload of the call"]
     pub payload: Vec<u8>,
 }
+#[doc = " arguments of the get_history function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetHistoryArgs {
+    #[doc = " index of the key the notes belong to"]
+    pub index: u64,
+    #[doc = " The notes of the wallet"]
+    pub notes: Vec<NoteInfoType>,
+    #[doc = " Seed of the wallet"]
+    pub seed: Vec<u8>,
+    #[doc = " The tx data of the wallet"]
+    pub tx_data: Vec<TxsDataType>,
+}
+#[doc = " Response of the get_history function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetHistoryResponse {
+    #[doc = " The history of a address"]
+    pub history: Vec<TransactionHistoryType>,
+}
 #[doc = " Retrieve the seed bytes from the mnemonic and passphrase"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct GetMnemonicSeedArgs {
@@ -342,6 +360,8 @@ pub struct MnewmonicNewResponse {
 #[doc = " Information about the note"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct NoteInfoType {
+    #[doc = " The block height of the note"]
+    pub block_height: u64,
     #[doc = " Singular Note rkyv serialized"]
     pub note: Vec<u8>,
     #[doc = " Nullifier of a Singular Note rkyv serialized"]
@@ -455,6 +475,42 @@ pub struct SeedArgs {
     #[doc = " An arbitrary sequence of bytes used to generate a secure seed"]
     pub passphrase: Vec<u8>,
 }
+#[doc = " The direction of the transaction"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub enum TransactionDirectionType {
+    In,
+    Out,
+}
+#[doc = " The type of the transaction history"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct TransactionHistoryType {
+    #[doc = " The amount of the transaction"]
+    pub amount: f64,
+    #[doc = " The block height of the transaction"]
+    pub block_height: u64,
+    #[doc = " The direction of the transaction, in or out"]
+    pub direction: TransactionDirectionType,
+    #[doc = " The fee of the transaction"]
+    pub fee: u64,
+    #[doc = " The hash of the transaction"]
+    pub id: String,
+}
+#[doc = " Metadata of the transaction, used in calculating history"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct TxDataType {
+    #[doc = " The amount of gas spent in the transaction"]
+    pub gas_spent: u64,
+    #[doc = " The raw transaction bytes"]
+    pub raw_tx: String,
+}
+#[doc = " Collection of transactions at a given block height"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct TxsDataType {
+    #[doc = " The block height of the transactions"]
+    pub block_height: u64,
+    #[doc = " The transactions at the given block height"]
+    pub txs: Vec<TxDataType>,
+}
 #[doc = " Arguments of the unproven_tx_to_bytes_response"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct UnprovenTxToBytesResponse {
@@ -472,6 +528,8 @@ pub struct UnpsentSpentNotesResponse {
 #[doc = " Arguents of the unspent_spent_notes function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct UnspentSpentNotesArgs {
+    #[doc = " The Array<Number> of block heights of thte notes in the same order as the notes"]
+    pub block_heights: Vec<f64>,
     #[doc = " The UInt8Array of rkyv serialized nullifiers recieved from the node"]
     pub existing_nullifiers: Vec<u8>,
     #[doc = " The Array<UInt8Array> of rkyv serialized notes"]

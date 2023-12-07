@@ -82,6 +82,7 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
     let types::UnspentSpentNotesArgs {
         notes,
         nullifiers_of_notes,
+        block_heights,
         existing_nullifiers,
         psks,
     } = match utils::take_args(args, len) {
@@ -98,8 +99,11 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
     let mut spent_notes = Vec::new();
     let mut unspent_notes = Vec::new();
 
-    for ((note, nullifier), psk) in
-        notes.into_iter().zip(nullifiers_of_notes).zip(psks)
+    for (index, ((note, nullifier), psk)) in notes
+        .into_iter()
+        .zip(nullifiers_of_notes)
+        .zip(psks)
+        .enumerate()
     {
         let parsed_note: Note = match rkyv::from_bytes::<Note>(&note).ok() {
             Some(a) => a,
@@ -112,10 +116,16 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
                 None => return utils::fail(),
             };
 
+        let block_height = match block_heights.get(index) {
+            Some(a) => *a as u64,
+            None => return utils::fail(),
+        };
+
         if existing_nullifiers.contains(&parsed_nullifier) {
             spent_notes.push(types::NoteInfoType {
                 pos: *parsed_note.pos(),
                 psk,
+                block_height,
                 note,
                 nullifier,
             });
@@ -123,6 +133,7 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
             unspent_notes.push(types::NoteInfoType {
                 pos: *parsed_note.pos(),
                 note,
+                block_height,
                 psk,
                 nullifier,
             });

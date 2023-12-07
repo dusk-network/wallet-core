@@ -745,7 +745,7 @@
     "UnspentSpentNotesArgs": {
       "description": "Arguents of the unspent_spent_notes function",
       "type": "object",
-      "required": ["notes", "nullifiers_of_notes", "existing_nullifiers", "psks"],
+      "required": ["notes", "nullifiers_of_notes", "block_heights", "existing_nullifiers", "psks"],
       "properties": {
         "notes": {
           "description": "The Array<UInt8Array> of rkyv serialized notes",
@@ -767,6 +767,14 @@
               "type": "integer",
               "format": "uint8"
             }
+          }
+        },
+        "block_heights": {
+          "description": "The Array<Number> of block heights of thte notes in the same order as the notes",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "uint64"
           }
         },
         "existing_nullifiers": {
@@ -810,7 +818,7 @@
     "NoteInfoType": {
       "description": "Information about the note",
       "type": "object",
-      "required": ["pos", "psk", "note", "nullifier"],
+      "required": ["pos", "psk", "note", "nullifier", "block_height"],
       "properties": {
         "pos": {
           "description": "position of the note",
@@ -835,6 +843,11 @@
             "type": "integer",
             "format": "uint8"
           }
+        },
+        "block_height": {
+          "description": "The block height of the note",
+          "type": "integer",
+          "format": "uint64"
         }
       }
     },
@@ -1287,6 +1300,127 @@
           "items": {
             "type": "integer",
             "format": "uint8"
+          }
+        }
+      }
+    },
+    "TxDataType": {
+      "description": "Metadata of the transaction, used in calculating history",
+      "type": "object",
+      "required": ["raw_tx", "gas_spent"],
+      "properties": {
+        "raw_tx": {
+          "description": "The raw transaction bytes",
+          "type": "string"
+        },
+        "gas_spent": {
+          "description": "The amount of gas spent in the transaction",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "TxsDataType": {
+      "description": "Collection of transactions at a given block height",
+      "type": "object",
+      "required": ["block_height", "txs"],
+      "properties": {
+        "block_height": {
+          "description": "The block height of the transactions",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "txs": {
+          "description": "The transactions at the given block height",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TxDataType"
+          }
+        }
+      }
+    },
+    "GetHistoryArgs": {
+      "description": "arguments of the get_history function",
+      "type": "object",
+      "required": ["seed", "index", "notes", "tx_data"],
+      "properties": {
+        "seed": {
+          "description": "Seed of the wallet",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "index": {
+          "description": "index of the key the notes belong to",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "notes": {
+          "description": "The notes of the wallet",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NoteInfoType"
+          }
+        },
+        "tx_data": {
+          "description": "The tx data of the wallet",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TxsDataType"
+          }
+        }
+      }
+    },
+    "TransactionDirectionType": {
+      "description": "The direction of the transaction",
+      "type": "string",
+      "enum": [
+        "In",
+        "Out"
+      ]
+    },
+    "TransactionHistoryType": {
+      "description": "The type of the transaction history",
+      "type": "object",
+      "required": ["direction", "block_height", "fee", "amount", "id"],
+      "properties": {
+        "direction": {
+          "description": "The direction of the transaction, in or out",
+          "$ref": "#/definitions/TransactionDirectionType"
+        },
+        "block_height": {
+          "description": "The block height of the transaction",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "fee": {
+          "description": "The fee of the transaction",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "amount": {
+          "description": "The amount of the transaction",
+          "type": "number",
+          "format": "uint64"
+        },
+        "id": {
+          "description": "The hash of the transaction",
+          "type": "string"
+        }
+      }
+    },
+    "GetHistoryResponse": {
+      "description": "Response of the get_history function",
+      "type": "object",
+      "required": ["history"],
+      "properties": {
+        "history": {
+          "description": "The history of a address",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TransactionHistoryType"
           }
         }
       }
