@@ -140,6 +140,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
         gas_price,
         refund,
         rng_seed,
+        sender_index,
         seed,
     } = match utils::take_args(args, len) {
         Some(a) => a,
@@ -151,12 +152,13 @@ pub fn execute(args: i32, len: i32) -> i64 {
         Err(_) => return utils::fail(),
     };
 
-    let fee: Fee = match rkyv::from_bytes(&fee) {
-        Ok(n) => n,
-        Err(_) => return utils::fail(),
-    };
+    let fee: Option<Fee> =
+        fee.and_then(|fee| match rkyv::from_bytes::<Fee>(&fee) {
+            Ok(n) => Some(n),
+            Err(_) => None,
+        });
 
-    let openings: Vec<tx::Opening> = match rkyv::from_bytes(&openings) {
+    let openings: Vec<(tx::Opening, u64)> = match rkyv::from_bytes(&openings) {
         Ok(n) => n,
         Err(_) => return utils::fail(),
     };
@@ -166,7 +168,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let rng_seed: [u8; 32] = match rng_seed.try_into().ok() {
+    let rng_seed: [u8; 32] = match utils::sanitize_rng_seed(rng_seed) {
         Some(s) => s,
         None => return utils::fail(),
     };
@@ -177,49 +179,46 @@ pub fn execute(args: i32, len: i32) -> i64 {
         .saturating_add(value)
         .saturating_add(crossover.clone().map(|c| c.value).unwrap_or_default());
 
-    let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
-    let mut keys_ssk = unsafe { [mem::zeroed(); MAX_KEY + 1] };
-    let mut keys_len = 0;
-    let mut openings = openings.into_iter();
     let mut full_inputs = Vec::with_capacity(inputs.len());
 
-    'outer: for input in inputs {
-        // we iterate all the available keys until one can successfully
-        // decrypt the note. if any fails, returns false
-        for idx in 0..=MAX_KEY {
-            if keys_len == idx {
-                keys_ssk[idx] = key::derive_ssk(&seed, idx as u64);
-                keys[idx] = keys_ssk[idx].view_key();
-                keys_len += 1;
-            }
+    let view_key = key::derive_vk(&seed, sender_index);
+    let ssk = key::derive_ssk(&seed, sender_index);
 
-            if let Ok(value) = input.value(Some(&keys[idx])) {
-                let opening = match openings.next() {
-                    Some(o) => o,
-                    None => return utils::fail(),
+    'outer: for input in inputs {
+        if let Ok(value) = input.value(Some(&view_key)) {
+            let opening =
+                match openings.iter().find(|(_, pos)| input.pos() == pos) {
+                    Some(a) => a.0,
+                    None => {
+                        return utils::fail();
+                    }
                 };
 
-                full_inputs.push((input, opening, value, idx));
-                continue 'outer;
-            }
+            let blinder = match input.blinding_factor(Some(&view_key)).ok() {
+                Some(a) => a,
+                None => return utils::fail(),
+            };
+
+            full_inputs.push((input, opening, value, blinder));
+            continue 'outer;
         }
 
         return utils::fail();
     }
 
     // optimizes the inputs given the total amount
-    let (unspent, inputs) = match utils::knapsack(full_inputs, total_output) {
+    let inputs = match utils::inputs(full_inputs, total_output) {
         Some(k) => k,
         None => return utils::fail(),
     };
 
     let inputs: Vec<_> = inputs
         .into_iter()
-        .map(|(note, opening, value, idx)| tx::PreInput {
+        .map(|(note, opening, value, _)| tx::PreInput {
             note,
             opening,
             value,
-            ssk: &keys_ssk[idx],
+            ssk: &ssk,
         })
         .collect();
 
@@ -239,26 +238,35 @@ pub fn execute(args: i32, len: i32) -> i64 {
         outputs.push(o);
     }
 
-    let rng = &mut utils::rng(rng_seed);
+    let rng: &mut rand_chacha::ChaCha12Rng = &mut utils::rng(rng_seed);
+    let actual_fee;
+    let refund = match utils::bs58_to_psk(&refund) {
+        Some(r) => r,
+        None => return utils::fail(),
+    };
+
+    if let Some(fee) = fee {
+        actual_fee = fee;
+    } else {
+        actual_fee = Fee::new(rng, gas_limit, gas_price, &refund);
+    }
+
     let tx = tx::UnprovenTransaction::new(
-        rng, inputs, outputs, fee, crossover, call,
+        rng, inputs, outputs, actual_fee, crossover, call,
     );
+
     let tx = match tx {
         Some(t) => t,
         None => return utils::fail(),
     };
 
-    let unspent = match rkyv::to_bytes::<_, MAX_LEN>(&unspent).ok() {
-        Some(t) => t.into_vec(),
+    let tx = match rkyv::to_bytes::<tx::UnprovenTransaction, MAX_LEN>(&tx).ok()
+    {
+        Some(t) => t.to_vec(),
         None => return utils::fail(),
     };
 
-    let tx = match rkyv::to_bytes::<_, MAX_LEN>(&tx).ok() {
-        Some(t) => t.into_vec(),
-        None => return utils::fail(),
-    };
-
-    utils::into_ptr(types::ExecuteResponse { tx, unspent })
+    utils::into_ptr(types::ExecuteResponse { tx })
 }
 
 /// Merges many lists of serialized notes into a unique, sanitized set.

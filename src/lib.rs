@@ -10,12 +10,14 @@
 
 extern crate alloc;
 
+#[cfg(feature = "compat")]
+/// compat module adds compatiblity functions for non rust platforms
+pub mod compat;
 pub mod ffi;
 pub mod key;
 pub mod tx;
 pub mod types;
 pub mod utils;
-
 /// The maximum number of keys (inclusive) to derive when attempting to decrypt
 /// a note.
 pub const MAX_KEY: usize = 24;
@@ -28,3 +30,6 @@ pub const RNG_SEED: usize = 64;
 
 /// The length of the allocated response.
 pub const RESPONSE_LEN: usize = 3 * i32::BITS as usize / 8;
+
+/// The maximum number of input notes that are sent with the transaction
+pub const MAX_INPUT_NOTES: usize = 4;

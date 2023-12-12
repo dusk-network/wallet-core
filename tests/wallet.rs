@@ -14,9 +14,8 @@ use dusk_wallet_core::{
     types::{self, CrossoverType as WasmCrossover},
     utils, MAX_KEY, MAX_LEN, RNG_SEED,
 };
-use phoenix_core::{Crossover, Fee};
-use rand::rngs::StdRng;
-use rand_core::SeedableRng;
+use phoenix_core::Crossover;
+
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -43,7 +42,7 @@ fn balance_works() {
         .call(
             "balance",
             json!({
-                "notes": node::notes(&seed, values),
+                "notes": node::notes(&seed, values).0,
                 "seed": seed.to_vec(),
             }),
         )
@@ -71,7 +70,7 @@ fn execute_works() {
         .take_contents();
     let psk = &keys[0];
 
-    let mut contract = ContractId::uninitialized();
+    let mut contract: ContractId = ContractId::uninitialized();
     contract.as_bytes_mut().iter_mut().for_each(|b| *b = 0xfa);
     let contract = bs58::encode(contract.as_bytes()).into_string();
 
@@ -89,15 +88,6 @@ fn execute_works() {
         value: 0,
     };
 
-    let fee = Fee::new(
-        &mut StdRng::from_entropy(),
-        240000,
-        0,
-        &utils::bs58_to_psk(psk).unwrap(),
-    );
-
-    let fee = rkyv::to_bytes::<Fee, MAX_LEN>(&fee).unwrap().to_vec();
-
     let args = json!({
         "call": {
             "contract": contract,
@@ -107,12 +97,12 @@ fn execute_works() {
         "crossover": crossover,
         "gas_limit": 100,
         "gas_price": 2,
-        "fee": fee,
         "inputs": inputs,
+        "sender_index": 0,
         "openings": openings,
         "output": {
-            "note_type": "Transparent",
-            "receiver": psk,
+            "note_type": "Obfuscated",
+            "receiver": &keys[1],
             "ref_id": 15,
             "value": 10,
         },
@@ -120,11 +110,11 @@ fn execute_works() {
         "rng_seed": rng_seed.to_vec(),
         "seed": seed.to_vec()
     });
-    let types::ExecuteResponse { tx, unspent } =
+
+    let types::ExecuteResponse { tx } =
         wallet.call("execute", args).take_contents();
 
     rkyv::from_bytes::<tx::UnprovenTransaction>(&tx).unwrap();
-    rkyv::from_bytes::<Vec<phoenix_core::Note>>(&unspent).unwrap();
 }
 
 #[test]
@@ -281,8 +271,7 @@ mod node {
             .into_iter()
             .map(|value| {
                 let obfuscated = (rng.next_u32() & 1) == 1;
-                let idx = rng.next_u64() % MAX_KEY as u64;
-                let psk = key::derive_ssk(seed, idx).public_spend_key();
+                let psk = key::derive_ssk(seed, 0).public_spend_key();
 
                 if obfuscated {
                     let blinder = JubJubScalar::random(rng);
@@ -294,13 +283,32 @@ mod node {
             .collect()
     }
 
-    pub fn notes<Values>(seed: &[u8; RNG_SEED], values: Values) -> Vec<u8>
+    pub fn notes<Values>(
+        seed: &[u8; RNG_SEED],
+        values: Values,
+    ) -> (Vec<u8>, Vec<u8>)
     where
         Values: IntoIterator<Item = u64>,
     {
-        rkyv::to_bytes::<_, MAX_LEN>(&raw_notes(seed, values))
-            .expect("failed to serialize notes")
-            .into_vec()
+        let notes = raw_notes(seed, values);
+        let len = notes.len();
+
+        let openings: Vec<_> = (0..len)
+            .zip(notes.clone())
+            .map(|(_, note)| {
+                let opening = unsafe { mem::zeroed::<tx::Opening>() };
+                (opening, *note.pos())
+            })
+            .collect();
+
+        (
+            rkyv::to_bytes::<_, MAX_LEN>(&notes)
+                .expect("failed to serialize notes")
+                .into_vec(),
+            rkyv::to_bytes::<Vec<(tx::Opening, u64)>, MAX_LEN>(&openings)
+                .expect("failed to serialize openings")
+                .into_vec(),
+        )
     }
 
     pub fn notes_and_openings<Values>(
@@ -311,15 +319,8 @@ mod node {
         Values: IntoIterator<Item = u64>,
     {
         let values: Vec<_> = values.into_iter().collect();
-        let len = values.len();
-        let notes = notes(seed, values);
-        let openings: Vec<_> = (0..len)
-            .map(|_| unsafe { mem::zeroed::<tx::Opening>() })
-            .collect();
 
-        let openings = rkyv::to_bytes::<_, MAX_LEN>(&openings)
-            .expect("failed to serialize openings")
-            .into_vec();
+        let (notes, openings) = notes(seed, values);
 
         (notes, openings)
     }
@@ -362,8 +363,8 @@ pub struct Wallet {
 
 pub struct CallResult<'a> {
     pub status: bool,
-    pub val: u64,
-    pub aux: u64,
+    pub val: u32,
+    pub aux: u32,
     pub wallet: &'a mut Wallet,
 }
 
@@ -389,7 +390,7 @@ impl<'a> CallResult<'a> {
             .get_memory("memory")
             .unwrap()
             .view(&self.wallet.store)
-            .read(self.val, &mut bytes)
+            .read(self.val as u64, &mut bytes)
             .unwrap();
 
         self.wallet
@@ -416,7 +417,7 @@ impl<'a> CallResult<'a> {
         serde_json::from_str(&json).unwrap()
     }
 
-    pub fn take_val(self) -> u64 {
+    pub fn take_val(self) -> u32 {
         assert!(self.status);
         self.val
     }

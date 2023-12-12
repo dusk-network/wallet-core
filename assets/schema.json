@@ -177,13 +177,13 @@
       "description": "The arguments of the execute function",
       "type": "object",
       "required": [
-        "fee",
         "gas_limit",
         "gas_price",
         "inputs",
         "openings",
         "refund",
         "rng_seed",
+        "sender_index",
         "seed"
       ],
       "properties": {
@@ -224,7 +224,7 @@
           }
         },
         "openings": {
-          "description": "A rkyv serialized [Vec<tx::Opening>] to open the inputs to a Merkle root",
+          "description": "A rkyv serialized [Vec<tx::Opening>] to open the inputs to a Merkle root, along with the positions of the notes the openings are of in a tuple (opening, position) rkyv serialized, see rkyv.rs/rkyv_openings_array",
           "type": "array",
           "items": {
             "type": "integer",
@@ -261,33 +261,25 @@
           },
           "maxItems": 64,
           "minItems": 64
+        },
+        "sender_index": {
+          "description": "The index of the sender in the seed",
+          "type": "integer",
+          "format": "uint64"
         }
       }
     },
     "ExecuteResponse": {
-      "description": "The response of the execute function",
+      "description": "Response of the execute function",
+      "required": ["tx"],
       "type": "object",
-      "required": [
-        "tx",
-        "unspent"
-      ],
       "properties": {
         "tx": {
-          "description": "A rkyv serialized [crate::tx::UnspentTransaction]",
+          "description": "The rkyv serialized unproven transaction",
           "type": "array",
           "items": {
             "type": "integer",
-            "format": "uint8",
-            "minimum": 0
-          }
-        },
-        "unspent": {
-          "description": "A rkyv serialized [Vec<phoenix_core::Note>] containing the notes that weren't used",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "uint8",
-            "minimum": 0
+            "format": "uint8"
           }
         }
       }
@@ -422,6 +414,1014 @@
           },
           "maxItems": 64,
           "minItems": 64
+        }
+      }
+    },
+    "RkyvU64": {
+      "description": "A serialized u64 using rkyv",
+      "type": "object",
+      "required": ["value"],
+      "properties": {
+        "value": {
+          "description": "A u64 rust string, representing a valid rust u64 (max: 18446744073709551615)",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      }
+    },
+    "RkyvTreeLeaf": {
+      "description": "The arguments of the balance function",
+      "type": "object",
+      "required": [
+        "bytes"
+      ],
+      "properties": {
+        "bytes": {
+          "description": "Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 632
+          }
+        }
+      }
+    },
+    "RkyvTreeLeafResponse": {
+      "description": "The response of the public_spend_keys function",
+      "type": "object",
+      "required": [
+        "block_height",
+        "note",
+        "last_pos"
+      ],
+      "properties": {
+        "block_height": {
+          "description": "The block height of the note.",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "note": {
+          "description": "Bytes of note at the block_height",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "last_pos": {
+          "description": "Last position of the note",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "RkyvNotesArray": {
+      "description": "The arguments of the rkyv_notes_array function",
+      "type": "object",
+      "required": [
+        "notes"
+      ],
+      "properties": {
+        "notes": {
+          "description": "Array of notes which are rkyv serialized",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
+          }
+        }
+      }
+    },
+    "MnemonicNewArgs": {
+      "description": "The arguments of the mnemonic_new function",
+      "type": "object",
+      "required": ["rng_seed"],
+      "properties": {
+        "rng_seed": {
+          "description": "Cryptographically secure [u8; 64]",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maxItems": 64,
+            "minItems": 64
+          }
+        }
+      }
+    },
+    "MnewmonicNewResponse": {
+      "description": "Response of the new_mnemonic function",
+      "type": "object",
+      "required": ["mnemonic_string"],
+      "properties": {
+        "mnemonic_string": {
+          "description": "String from the generated mnemonic",
+          "type": "string"
+        }
+      }
+    },
+    "GetMnemonicSeedArgs": {
+      "description": "Retrieve the seed bytes from the mnemonic and passphrase",
+      "type": "object",
+      "required": ["mnemonic", "passphrase"],
+      "properties": {
+        "mnemonic": {
+          "description": "The mnemonic string",
+          "type": "string"
+        },
+        "passphrase": {
+          "description": "The passphrase tied to that mnemonic",
+          "type": "string"
+        }
+      }
+    },
+    "GetMnemonicSeedResponse": {
+      "description": "Response of the get_mnemonic_seed function",
+      "type": "object",
+      "required": ["mnemonic_seed"],
+      "properties": {
+        "mnemonic_seed": {
+          "description": "Seed bytes from the given passphrase and Mnemonic",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maxItems": 64,
+            "minItems": 64
+          }
+        }
+      }
+    },
+    "PublicSpendKeysAndNotesType": {
+      "description": "Type of the response of the check_note_validity function",
+      "type": "object",
+      "required": ["public_spend_key", "notes"],
+      "properties": {
+        "public_spend_key": {
+          "description": "The public spend key as a bs58 formated string",
+          "type": "string"
+        },
+        "notes": {
+          "description": "Array of notes which are rkyv serialized",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "CheckNoteOwnershipArgs": {
+      "description": "Arguments of the check_note_ownership function",
+      "type": "object",
+      "required": ["note", "seed"],
+      "properties": {
+        "note": {
+          "description": "A singular note we want to check the validity of",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "seed": {
+          "description": "The seed to generate the view keys from",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "CheckNoteOwnershipResponse": {
+      "description": "Response of check_note_ownership function",
+      "type": "object",
+      "required": ["is_owned", "nullifier"],
+      "properties": {
+        "is_owned": {
+          "description": "Is the note owned by any of the view keys in the provided seed",
+          "type": "boolean"
+        },
+        "nullifier": {
+          "description": "Nullifier of the note that we were checking the ownership of",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "public_spend_key": {
+          "description": "A base 58 encoded public spend key string",
+          "type": "string"
+        }
+      }
+    },
+    "RkyvBlsScalarArrayArgs": {
+      "description": "Arguments of the rkyv_bls_scalar_array function",
+      "type": "object",
+      "required": ["bytes"],
+      "properties": {
+        "bytes": {
+          "description": "An array containing rkyv serialized bytes of each bls scalar",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
+          }
+        }
+      }
+    },
+    "FilterNulifierNotesArgs": {
+      "description": "Arguments of the filter_nullifier_note function",
+      "type": "object",
+      "required": ["notes", "existing_nullifiers", "seed"],
+      "properties": {
+        "notes": {
+          "description": "notes we want to check the nullifiers of as a Vec<Note>",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "existing_nullifiers": {
+          "description": "The existing nullifiers that are spent as a Vec<BlsScalar>",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "seed": {
+          "description": "The seed to generate the view keys from",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "RkyvOpeningsArray": {
+      "description": "Arguments of the rkyv_openings_array function",
+      "type": "object",
+      "required": ["openings"],
+      "properties": {
+        "openings": {
+          "description": "Vec containing the rkyv serialized bytes of each openings along with positions",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OpeningType"
+          }
+        }
+      }
+    },
+    "UnprovenTxToBytesResponse": {
+      "description": "Arguments of the unproven_tx_to_bytes_response",
+      "type": "object",
+      "required": ["serialized"],
+      "properties": {
+        "serialized": {
+          "description": "Serialied unproven_Tx ready to be sent to the network",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "ProveTxArgs": {
+      "description": "Arguments of the prove_tx function",
+      "type": "object",
+      "required": ["unproven_tx", "proof"],
+      "properties": {
+        "unproven_tx": {
+          "description": "The unproven_tx bytes",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "proof": {
+          "description": "The bytes of the proof of the tx",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "ProveTxResponse": {
+      "description": "Response of the prove_tx function",
+      "type": "object",
+      "required": ["bytes", "hash"],
+      "properties": {
+        "bytes": {
+          "description": "The bytes of the proven transaction ready to be sent to the node",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "hash": {
+          "description": "The hash of the proven transaction",
+          "type": "string"
+        }
+      }
+    },
+    "UnspentSpentNotesArgs": {
+      "description": "Arguents of the unspent_spent_notes function",
+      "type": "object",
+      "required": ["notes", "nullifiers_of_notes", "block_heights", "existing_nullifiers", "psks"],
+      "properties": {
+        "notes": {
+          "description": "The Array<UInt8Array> of rkyv serialized notes",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
+          }
+        },
+        "nullifiers_of_notes": {
+          "description": "The Array<UInt8Array> of rkyv serialized nullifiers of the note in the same order as the notes",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
+          }
+        },
+        "block_heights": {
+          "description": "The Array<Number> of block heights of thte notes in the same order as the notes",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "uint64"
+          }
+        },
+        "existing_nullifiers": {
+          "description": "The UInt8Array of rkyv serialized nullifiers recieved from the node",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "psks": {
+          "description": "Array of bs58 encoded string to be sent with the response of the function",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "UnpsentSpentNotesResponse": {
+      "description": "Arguments of the unspent spent notes response",
+      "type": "object",
+      "required": ["unspent_notes", "spent_notes"],
+      "properties": {
+        "unspent_notes": {
+          "description": "The notes which are not spent yet",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NoteInfoType"
+          }
+        },
+        "spent_notes": {
+          "description": "The notes which are spent",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NoteInfoType"
+          }
+        }
+      }
+    },
+    "NoteInfoType": {
+      "description": "Information about the note",
+      "type": "object",
+      "required": ["pos", "psk", "note", "nullifier", "block_height"],
+      "properties": {
+        "pos": {
+          "description": "position of the note",
+          "type": "integer"
+        },
+        "psk": {
+          "description": "public spend key belonging to that note",
+          "type": "string"
+        },
+        "note": {
+          "description": "Singular Note rkyv serialized",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "nullifier": {
+          "description": "Nullifier of a Singular Note rkyv serialized",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "block_height": {
+          "description": "The block height of the note",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "GetStctProofArgs": {
+      "description": "Get the bytes for the stct proof to send to the node",
+      "type": "object",
+      "required": ["rng_seed", "seed", "refund", "value", "sender_index", "gas_limit", "gas_price"],
+      "properties": {
+        "rng_seed": {
+          "description": "The rng seed to generate the entropy for the notes",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "seed": {
+          "description": "The seed to generate the sender keys from",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "refund": {
+          "description": "The refund address in base58 format",
+          "type": "string"
+        },
+        "value": {
+          "description": "The amount of value to send",
+          "type": "integer"
+        },
+        "sender_index": {
+          "description": "index of the sender in the seed",
+          "type": "integer"
+        },
+        "gas_limit": {
+          "description": "The gas limit of the transaction",
+          "type": "integer"
+        },
+        "gas_price": {
+          "description": "The gas price of the transaction",
+          "type": "integer"
+        }
+      }
+    },
+    "GetStctProofResponse": {
+      "description": "Response of the get_stct_proof function",
+      "type": "object",
+      "required": ["bytes", "signature", "crossover", "blinder", "fee"],
+      "properties": {
+        "bytes": {
+          "description": "The bytes of the stct proof to send to the node",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "signature": {
+          "description": "The signature of the stct proof",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "crossover": {
+          "description": "The crossover value of the stct proof",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "blinder": {
+          "description": "The blinder of the stct proof",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "fee": {
+          "description": "The Fee of the crossover note",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "GetStakeCallDataArgs": {
+      "description": "Get the call data for stakeing",
+      "type": "object",
+      "required": ["staker_index", "seed", "spend_proof", "value", "counter"],
+      "properties": {
+        "staker_index": {
+          "description": "Index of the address of the staker in the seed",
+          "type": "integer",
+          "format": "uint8"
+        },
+        "seed": {
+          "description": "The seed to generate the sender keys from",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "spend_proof": {
+          "description": "The stct proof as recieved from the node",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "value": {
+          "description": "The amount of value to stake",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "counter": {
+          "description": "The stake counter value",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "GetStakeCallDataResponse": {
+      "description": "Response of the get_stake_call_data function, send this to the call_data in execute",
+      "type": "object",
+      "required": ["contract", "method", "payload"],
+      "properties": {
+        "contract": {
+          "description": "The contract to call encoded in bs58 format",
+          "type": "string"
+        },
+        "method": {
+          "description": "The method to call on the contract",
+          "type": "string"
+        },
+        "payload": {
+          "description": "The payload of the call",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "DuskToLuxArgs": {
+      "description": "Arguments of the dusk_to_lux function",
+      "type": "object",
+      "required": ["dusk"],
+      "properties": {
+        "dusk": {
+          "description": "The amount of dusk to convert to lux",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "DuskToLuxResponse": {
+      "description": "Response of the dusk_to_lux function",
+      "type": "object",
+      "required": ["lux"],
+      "properties": {
+        "lux": {
+          "description": "The amount of lux that was converted from dusk",
+          "type": "number",
+          "format": "double"
+        }
+      }
+    },
+    "GetStakeInfoArgs": {
+      "description": "Args of the get_stake_info function",
+      "type": "object",
+      "required": ["stake_info"],
+      "properties": {
+        "stake_info": {
+          "description": "The stake info of the stake obtained from the node",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "GetStakeInfoRespose": {
+      "description": "Response of the get_stake_info function",
+      "type": "object",
+      "required": ["has_staked", "has_key"],
+      "properties": {
+        "has_staked": {
+          "description": "Has the given address staked",
+          "type": "boolean"
+        },
+        "amount": {
+          "description": "amount staked",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "eligiblity": {
+          "description": "eligiblity",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "reward": {
+          "description": "Reward for participating in concensus",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "counter": {
+          "description": "Signature counter to prevent replay",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "has_key": {
+          "description": "True if the key has been authorized to stake",
+          "type": "boolean"
+        }
+      }
+    },
+    "GetPublicKeyRkyvSerializedArgs": {
+      "description": "Args of the get_public_key_rkyv_serialized function",
+      "type": "object",
+      "required": ["seed", "index"],
+      "properties": {
+        "seed": {
+          "description": "The seed to generate the sender keys from",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "index": {
+          "description": "The index of the public key to get",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "GetUnstakeCallDataArgs": {
+      "description": "Args of the get_unstake_call_data function",
+      "type": "object",
+      "required": ["seed", "sender_index", "unstake_note", "counter", "unstake_proof"],
+      "properties": {
+        "seed": {
+          "description": "The seed to generate the sender keys from",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "sender_index": {
+          "description": "The index of the public key to get",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "unstake_note": {
+          "description": "The unstake note",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "counter": {
+          "description": "The counter of the unstake note",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "unstake_proof": {
+          "description": "The unstake proof",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "GetWfctProofResponse": {
+      "description": "Response of the get_wfct_proof function",
+      "type": "object",
+      "required": ["bytes", "unstake_note", "crossover", "blinder", "fee"],
+      "properties": {
+        "bytes": {
+          "description": "The bytes of the wfct proof to send to the node",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "unstake_note": {
+          "description": "The unstake note",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "crossover": {
+          "description": "Crossover of the tx",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "blinder": {
+          "description": "JubJubScalar Blinder for tx",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "fee": {
+          "description": "The fee of the tx",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "GetAllowCallDataArgs": {
+      "description": "Arguments for get_allow_call_data function",
+      "type": "object",
+      "required": ["seed", "rng_seed", "sender_index", "refund", "owner_index", "counter", "gas_limit", "gas_price"],
+      "properties": {
+        "seed": {
+          "description": "Seed of the wallet",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "rng_seed": {
+          "description": "random rng seed",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "sender_index": {
+          "description": "index of the sender of the tx",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "refund": {
+          "description": "psk in string of who to refund this tx to",
+          "type": "string"
+        },
+        "owner_index": {
+          "description": "index of the owner of the stake",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "counter": {
+          "description": "Counter value from stakeinfo",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "gas_limit": {
+          "description": "gas_limit",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "gas_price": {
+          "description": "gas_price",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "GetAllowCallDataResponse": {
+      "description": "Response of the get_allow_call_data function",
+      "type": "object",
+      "required": ["contract", "method", "payload", "blinder", "crossover", "fee"],
+      "properties": {
+        "contract": {
+          "description": "The id of the contract to call in Base58 format",
+          "type": "string"
+        },
+        "method": {
+          "description": "The name of the method to be called",
+          "type": "string"
+        },
+        "payload": {
+          "description": "The payload of the call",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0
+          }
+        },
+        "blinder": {
+          "description": "Blinder used to make the crossover",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "crossover": {
+          "description": "Crossover of this tx",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "fee": {
+          "description": "The fee of the tx",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "OpeningType": {
+      "description": "The type represents the Opening and the position of the note, the opening is of",
+      "type": "object",
+      "required": ["pos", "opening"],
+      "properties": {
+        "pos": {
+          "description": "The position of the note the opening is of",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "opening": {
+          "description": "The rkyv serialized opening",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        }
+      }
+    },
+    "TxDataType": {
+      "description": "Metadata of the transaction, used in calculating history",
+      "type": "object",
+      "required": ["raw_tx", "gas_spent"],
+      "properties": {
+        "raw_tx": {
+          "description": "The raw transaction bytes",
+          "type": "string"
+        },
+        "gas_spent": {
+          "description": "The amount of gas spent in the transaction",
+          "type": "integer",
+          "format": "uint64"
+        }
+      }
+    },
+    "TxsDataType": {
+      "description": "Collection of transactions at a given block height",
+      "type": "object",
+      "required": ["block_height", "txs"],
+      "properties": {
+        "block_height": {
+          "description": "The block height of the transactions",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "txs": {
+          "description": "The transactions at the given block height",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TxDataType"
+          }
+        }
+      }
+    },
+    "GetHistoryArgs": {
+      "description": "arguments of the get_history function",
+      "type": "object",
+      "required": ["seed", "index", "notes", "tx_data"],
+      "properties": {
+        "seed": {
+          "description": "Seed of the wallet",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
+        },
+        "index": {
+          "description": "index of the key the notes belong to",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "notes": {
+          "description": "The notes of the wallet",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NoteInfoType"
+          }
+        },
+        "tx_data": {
+          "description": "The tx data of the wallet",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TxsDataType"
+          }
+        }
+      }
+    },
+    "TransactionDirectionType": {
+      "description": "The direction of the transaction",
+      "type": "string",
+      "enum": [
+        "In",
+        "Out"
+      ]
+    },
+    "TransactionHistoryType": {
+      "description": "The type of the transaction history",
+      "type": "object",
+      "required": ["direction", "block_height", "fee", "amount", "id"],
+      "properties": {
+        "direction": {
+          "description": "The direction of the transaction, in or out",
+          "$ref": "#/definitions/TransactionDirectionType"
+        },
+        "block_height": {
+          "description": "The block height of the transaction",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "fee": {
+          "description": "The fee of the transaction",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "amount": {
+          "description": "The amount of the transaction",
+          "type": "number",
+          "format": "uint64"
+        },
+        "id": {
+          "description": "The hash of the transaction",
+          "type": "string"
+        }
+      }
+    },
+    "GetHistoryResponse": {
+      "description": "Response of the get_history function",
+      "type": "object",
+      "required": ["history"],
+      "properties": {
+        "history": {
+          "description": "The history of a address",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TransactionHistoryType"
+          }
         }
       }
     }

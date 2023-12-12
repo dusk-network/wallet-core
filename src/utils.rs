@@ -6,18 +6,21 @@
 
 //! Misc utilities required by the library implementation.
 
-use crate::{tx, MAX_LEN, RNG_SEED};
+use crate::{tx, MAX_INPUT_NOTES, MAX_LEN, RNG_SEED};
 
 use alloc::vec::Vec;
 use core::mem;
 
 use dusk_bytes::DeserializableSlice;
+use dusk_jubjub::JubJubScalar;
 use dusk_pki::PublicSpendKey;
 use phoenix_core::Note;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
+type Node = (Note, tx::Opening, u64, JubJubScalar);
 
 /// Composes a `i64` from the provided arguments. This will be returned from the
 /// WASM module functions.
@@ -33,9 +36,9 @@ pub const fn compose(success: bool, ptr: u32, len: u32) -> i64 {
 /// - status: a boolean indicating the success of the operation
 /// - ptr: a pointer to the underlying data
 /// - len: the length of the underlying data
-pub const fn decompose(result: i64) -> (bool, u64, u64) {
-    let ptr = (result >> 32) as u64;
-    let len = ((result << 32) >> 48) as u64;
+pub const fn decompose(result: i64) -> (bool, u32, u32) {
+    let ptr = (result >> 32) as u32;
+    let len = ((result & 0xFFFFFF00) >> 16) as u32;
     let success = ((result << 63) >> 63) == 0;
 
     (success, ptr, len)
@@ -49,7 +52,7 @@ where
 {
     let args = args as *mut u8;
     let len = len as usize;
-    let args = unsafe { Vec::from_raw_parts(args, len, len) };
+    let args: Vec<u8> = unsafe { Vec::from_raw_parts(args, len, len) };
     let args = alloc::string::String::from_utf8(args).ok()?;
     serde_json::from_str(&args).ok()
 }
@@ -63,9 +66,23 @@ pub fn sanitize_seed(bytes: Vec<u8>) -> Option<[u8; RNG_SEED]> {
     })
 }
 
+/// Sanitizes arbitrary bytes into well-formed seed.
+pub fn sanitize_rng_seed(bytes: Vec<u8>) -> Option<[u8; 32]> {
+    (bytes.len() == 32).then(|| {
+        let mut seed = [0u8; 32];
+        seed.copy_from_slice(&bytes);
+        seed
+    })
+}
+
 /// Fails the operation
 pub const fn fail() -> i64 {
     compose(false, 0, 0)
+}
+
+/// fail
+pub const fn fail_with() -> i64 {
+    compose(true, 0, 0)
 }
 
 /// Converts the provided response into an allocated pointer and returns the
@@ -136,26 +153,11 @@ pub fn bs58_to_psk(psk: &str) -> Option<PublicSpendKey> {
     PublicSpendKey::from_reader(&mut &bytes[..]).ok()
 }
 
-/// Perform a knapsack algorithm to define the notes to be used as input.
-///
-/// Returns a tuple containing (unspent, inputs). `unspent` contains the notes
-/// that are not used.
-#[allow(clippy::type_complexity)]
-pub fn knapsack(
-    mut nodes: Vec<(Note, tx::Opening, u64, usize)>,
-    target_sum: u64,
-) -> Option<(Vec<Note>, Vec<(Note, tx::Opening, u64, usize)>)> {
+/// Calculate the inputs for a transaction.
+pub fn inputs(nodes: Vec<Node>, target_sum: u64) -> Option<Vec<Node>> {
     if nodes.is_empty() {
         return None;
     }
-
-    // TODO implement a knapsack algorithm
-    // here we do a naive, desc order pick. optimally, we should maximize the
-    // number of smaller inputs that fits the target sum so we reduce the number
-    // of available small notes on the wallet. a knapsack implementation is
-    // optimal for such problems as it can deliver high confidence results
-    // with moderate memory space.
-    nodes.sort_by(|a, b| b.2.cmp(&a.2));
 
     let mut i = 0;
     let mut sum = 0;
@@ -167,9 +169,84 @@ pub fn knapsack(
     if sum < target_sum {
         return None;
     }
-    let unspent = nodes.split_off(i).into_iter().map(|n| n.0).collect();
 
-    Some((unspent, nodes))
+    let inputs = pick_notes(target_sum, nodes);
+
+    Some(inputs)
+}
+
+/// Pick the notes to be used in a transaction from a vector of notes.
+///
+/// The notes are picked in a way to maximize the number of notes used, while
+/// minimizing the value employed. To do this we sort the notes in ascending
+/// value order, and go through each combination in a lexicographic order
+/// until we find the first combination whose sum is larger or equal to
+/// the given value. If such a slice is not found, an empty vector is returned.
+///
+/// Note: it is presupposed that the input notes contain enough balance to cover
+/// the given `value`.
+fn pick_notes(value: u64, notes_and_values: Vec<Node>) -> Vec<Node> {
+    let mut notes_and_values = notes_and_values;
+    let len = notes_and_values.len();
+
+    if len <= MAX_INPUT_NOTES {
+        return notes_and_values;
+    }
+
+    notes_and_values.sort_by(|(_, _, aval, _), (_, _, bval, _)| aval.cmp(bval));
+
+    pick_lexicographic(notes_and_values.len(), |indices| {
+        indices
+            .iter()
+            .map(|index| notes_and_values[*index].2)
+            .sum::<u64>()
+            >= value
+    })
+    .map(|indices| {
+        indices
+            .into_iter()
+            .map(|index| notes_and_values[index])
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+fn pick_lexicographic<F: Fn(&[usize; MAX_INPUT_NOTES]) -> bool>(
+    max_len: usize,
+    is_valid: F,
+) -> Option<[usize; MAX_INPUT_NOTES]> {
+    let mut indices = [0; MAX_INPUT_NOTES];
+    indices
+        .iter_mut()
+        .enumerate()
+        .for_each(|(i, index)| *index = i);
+
+    loop {
+        if is_valid(&indices) {
+            return Some(indices);
+        }
+
+        let mut i = MAX_INPUT_NOTES - 1;
+
+        while indices[i] == i + max_len - MAX_INPUT_NOTES {
+            if i > 0 {
+                i -= 1;
+            } else {
+                break;
+            }
+        }
+
+        indices[i] += 1;
+        for j in i + 1..MAX_INPUT_NOTES {
+            indices[j] = indices[j - 1] + 1;
+        }
+
+        if indices[MAX_INPUT_NOTES - 1] == max_len {
+            break;
+        }
+    }
+
+    None
 }
 
 #[test]
@@ -193,52 +270,56 @@ fn knapsack_works() {
     let rng = &mut StdRng::seed_from_u64(0xbeef);
 
     // sanity check
-    assert_eq!(knapsack(vec![], 70), None);
+    assert_eq!(inputs(vec![], 70), None);
 
     // basic check
     let key = SecretSpendKey::random(rng);
     let blinder = JubJubScalar::random(rng);
     let note = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
-    let available = vec![(note, o, 100, 0)];
-    let unspent = vec![];
-    let inputs = available.clone();
-    assert_eq!(knapsack(available, 70), Some((unspent, inputs)));
+    let available = vec![(note, o, 100, blinder)];
+    let inputs_notes = available.clone();
+    assert_eq!(inputs(available, 70), Some(inputs_notes));
 
     // out of balance basic check
     let key = SecretSpendKey::random(rng);
     let blinder = JubJubScalar::random(rng);
     let note = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
-    let available = vec![(note, o, 100, 0)];
-    assert_eq!(knapsack(available, 101), None);
+    let available = vec![(note, o, 100, blinder)];
+    assert_eq!(inputs(available, 101), None);
 
     // multiple inputs check
     // note: this test is checking a naive, simple order-based output
     let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
+    let blinder1 = JubJubScalar::random(rng);
     let note1 = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
     let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
+    let blinder2 = JubJubScalar::random(rng);
     let note2 = Note::obfuscated(rng, &key.public_spend_key(), 500, blinder);
     let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
+    let blinder3 = JubJubScalar::random(rng);
     let note3 = Note::obfuscated(rng, &key.public_spend_key(), 300, blinder);
-    let available =
-        vec![(note1, o, 100, 0), (note2, o, 500, 1), (note3, o, 300, 2)];
-    let unspent = vec![note1];
-    let inputs = vec![(note2, o, 500, 1), (note3, o, 300, 2)];
-    assert_eq!(knapsack(available, 600), Some((unspent, inputs)));
+    let available = vec![
+        (note1, o, 100, blinder1),
+        (note2, o, 500, blinder2),
+        (note3, o, 300, blinder3),
+    ];
+
+    assert_eq!(inputs(available.clone(), 600), Some(available));
 
     // multiple inputs, out of balance check
     let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
+    let blinder1 = JubJubScalar::random(rng);
     let note1 = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
     let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
+    let blinder2 = JubJubScalar::random(rng);
     let note2 = Note::obfuscated(rng, &key.public_spend_key(), 500, blinder);
     let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
+    let blinder3 = JubJubScalar::random(rng);
     let note3 = Note::obfuscated(rng, &key.public_spend_key(), 300, blinder);
-    let available =
-        vec![(note1, o, 100, 0), (note2, o, 500, 1), (note3, o, 300, 2)];
-    assert_eq!(knapsack(available, 901), None);
+    let available = vec![
+        (note1, o, 100, blinder1),
+        (note2, o, 500, blinder2),
+        (note3, o, 300, blinder3),
+    ];
+    assert_eq!(inputs(available, 901), None);
 }
