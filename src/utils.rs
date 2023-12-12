@@ -36,9 +36,9 @@ pub const fn compose(success: bool, ptr: u32, len: u32) -> i64 {
 /// - status: a boolean indicating the success of the operation
 /// - ptr: a pointer to the underlying data
 /// - len: the length of the underlying data
-pub const fn decompose(result: i64) -> (bool, u64, u64) {
-    let ptr = (result >> 32) as u64;
-    let len = ((result << 32) >> 48) as u64;
+pub const fn decompose(result: i64) -> (bool, u32, u32) {
+    let ptr = (result >> 32) as u32;
+    let len = ((result & 0xFFFFFF00) >> 16) as u32;
     let success = ((result << 63) >> 63) == 0;
 
     (success, ptr, len)

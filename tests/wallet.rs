@@ -14,9 +14,8 @@ use dusk_wallet_core::{
     types::{self, CrossoverType as WasmCrossover},
     utils, MAX_KEY, MAX_LEN, RNG_SEED,
 };
-use phoenix_core::{Crossover, Fee};
-use rand::rngs::StdRng;
-use rand_core::SeedableRng;
+use phoenix_core::Crossover;
+
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -95,6 +94,7 @@ fn execute_works() {
             "method": "commit",
             "payload": b"We lost because we told ourselves we lost.".to_vec(),
         },
+        "crossover": crossover,
         "gas_limit": 100,
         "gas_price": 2,
         "inputs": inputs,
@@ -363,8 +363,8 @@ pub struct Wallet {
 
 pub struct CallResult<'a> {
     pub status: bool,
-    pub val: u64,
-    pub aux: u64,
+    pub val: u32,
+    pub aux: u32,
     pub wallet: &'a mut Wallet,
 }
 
@@ -390,7 +390,7 @@ impl<'a> CallResult<'a> {
             .get_memory("memory")
             .unwrap()
             .view(&self.wallet.store)
-            .read(self.val, &mut bytes)
+            .read(self.val as u64, &mut bytes)
             .unwrap();
 
         self.wallet
@@ -417,7 +417,7 @@ impl<'a> CallResult<'a> {
         serde_json::from_str(&json).unwrap()
     }
 
-    pub fn take_val(self) -> u64 {
+    pub fn take_val(self) -> u32 {
         assert!(self.status);
         self.val
     }
