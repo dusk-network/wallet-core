@@ -33,6 +33,7 @@ use rkyv::ser::serializers::{
 use rkyv::validation::validators::CheckDeserializeError;
 use rkyv::Serialize;
 use rusk_abi::ContractId;
+use stake_contract_types::Unstake;
 
 const MAX_INPUT_NOTES: usize = 4;
 
@@ -581,6 +582,7 @@ where
 
         let signature = unstake_sign(&sk, &pk, stake.counter, unstake_note);
 
+        let unstake_note = unstake_note.to_bytes().to_vec();
         let unstake = Unstake {
             public_key: pk,
             signature,
