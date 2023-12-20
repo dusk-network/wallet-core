@@ -22,8 +22,10 @@ pub mod unstake;
 /// Includes functions to interact with the stake contract withdraw tx
 pub mod withdraw;
 
-pub use stake_contract_types::{
-    allow_signature_message, stake_signature_message,
-    unstake_signature_message, withdraw_signature_message,
-};
-pub use stake_contract_types::{Allow, Stake, Unstake, Withdraw};
+mod stake_contract_types {
+    pub use stake_contract_types::{
+        allow_signature_message, stake_signature_message,
+        unstake_signature_message, withdraw_signature_message,
+    };
+    pub use stake_contract_types::{Allow, Stake, Unstake, Withdraw};
+}

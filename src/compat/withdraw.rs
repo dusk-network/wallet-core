@@ -14,7 +14,7 @@ use dusk_jubjub::{BlsScalar, JubJubScalar};
 use dusk_pki::StealthAddress;
 use phoenix_core::*;
 
-use super::*;
+use super::stake_contract_types::*;
 
 /// Get unstake call data
 #[no_mangle]

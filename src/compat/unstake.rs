@@ -22,7 +22,7 @@ use dusk_jubjub::{JubJubAffine, JubJubScalar};
 use dusk_plonk::proof_system::Proof;
 use phoenix_core::*;
 
-use super::*;
+use super::stake_contract_types::*;
 
 const WFCT_INPUT_SIZE: usize =
     JubJubAffine::SIZE + u64::SIZE + JubJubScalar::SIZE;

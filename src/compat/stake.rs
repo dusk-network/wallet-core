@@ -28,7 +28,7 @@ use phoenix_core::{
     *,
 };
 
-use super::*;
+use super::stake_contract_types::*;
 
 const STCT_INPUT_SIZE: usize = Fee::SIZE
     + Crossover::SIZE

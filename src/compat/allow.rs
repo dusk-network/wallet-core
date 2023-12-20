@@ -12,7 +12,7 @@ use dusk_bls12_381_sign::PublicKey;
 use dusk_jubjub::JubJubScalar;
 use phoenix_core::{Note, *};
 
-use super::*;
+use super::stake_contract_types::*;
 
 /// Get unstake call data
 #[no_mangle]
