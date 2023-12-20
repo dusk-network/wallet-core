@@ -7,12 +7,12 @@
 use crate::{key::*, types, utils, MAX_LEN};
 
 use alloc::string::String;
-use alloc::vec::Vec;
 
-use dusk_bls12_381_sign::{PublicKey, SecretKey, Signature as BlsSignature};
-use dusk_bytes::Serializable;
+use dusk_bls12_381_sign::PublicKey;
 use dusk_jubjub::JubJubScalar;
-use phoenix_core::{transaction::*, Note, *};
+use phoenix_core::{Note, *};
+
+use super::*;
 
 /// Get unstake call data
 #[no_mangle]
@@ -54,7 +54,8 @@ pub fn get_allow_call_data(args: i32, len: i32) -> i64 {
 
     let rng = &mut utils::rng(rng_seed);
 
-    let signature = allow_sign(&owner_sk, &owner_pk, counter, &staker);
+    let msg = allow_signature_message(counter, &staker);
+    let signature = owner_sk.sign(&owner_pk, &msg);
 
     let blinder = JubJubScalar::random(rng);
     let note = Note::obfuscated(rng, &refund, 0, blinder);
@@ -102,23 +103,4 @@ pub fn get_allow_call_data(args: i32, len: i32) -> i64 {
         crossover,
         fee,
     })
-}
-
-/// Creates a signature compatible with what the stake contract expects for a
-/// ADD_ALLOWLIST transaction.
-///
-/// The counter is the number of transactions that have been sent to the
-/// transfer contract by a given key, and is reported in `StakeInfo`.
-fn allow_sign(
-    sk: &SecretKey,
-    pk: &PublicKey,
-    counter: u64,
-    staker: &PublicKey,
-) -> BlsSignature {
-    let mut msg = Vec::with_capacity(u64::SIZE + PublicKey::SIZE);
-
-    msg.extend(counter.to_bytes());
-    msg.extend(staker.to_bytes());
-
-    sk.sign(pk, &msg)
 }

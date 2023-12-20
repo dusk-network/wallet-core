@@ -16,14 +16,19 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use dusk_bls12_381::BlsScalar;
-use dusk_bls12_381_sign::{PublicKey, SecretKey, Signature as BlsSignature};
+use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Serializable;
 use dusk_bytes::Write;
 use dusk_jubjub::JubJubScalar;
 use dusk_pki::{Ownable, SecretKey as SchnorrKey};
 use dusk_plonk::proof_system::Proof;
 use dusk_schnorr::Signature;
-use phoenix_core::{transaction::*, Note, *};
+use phoenix_core::{
+    transaction::{stct_signature_message, StakeData},
+    *,
+};
+
+use super::*;
 
 const STCT_INPUT_SIZE: usize = Fee::SIZE
     + Crossover::SIZE
@@ -175,7 +180,8 @@ pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
     let sk = derive_sk(&seed, staker_index);
     let pk = PublicKey::from(&sk);
 
-    let signature = stake_sign(&sk, &pk, counter, value);
+    let msg = stake_signature_message(counter, value);
+    let signature = sk.sign(&pk, &msg);
 
     let stake = Stake {
         public_key: pk,
@@ -239,24 +245,4 @@ fn get_stake_info(args: i32, len: i32) -> i64 {
             has_key: false,
         }),
     }
-}
-
-/// Creates a signature compatible with what the stake contract expects for a
-/// stake transaction.
-///
-/// The counter is the number of transactions that have been sent to the
-/// transfer contract by a given key, and is reported in `StakeInfo`.
-fn stake_sign(
-    sk: &SecretKey,
-    pk: &PublicKey,
-    counter: u64,
-    value: u64,
-) -> BlsSignature {
-    let size = u64::SIZE + u64::SIZE;
-    let mut msg = Vec::with_capacity(size);
-
-    msg.extend(counter.to_bytes());
-    msg.extend(value.to_bytes());
-
-    sk.sign(pk, &msg)
 }

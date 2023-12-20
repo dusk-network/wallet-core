@@ -15,12 +15,14 @@ use crate::{
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use dusk_bls12_381_sign::{PublicKey, SecretKey, Signature as BlsSignature};
+use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::Serializable;
 use dusk_bytes::Write;
 use dusk_jubjub::{JubJubAffine, JubJubScalar};
 use dusk_plonk::proof_system::Proof;
-use phoenix_core::{transaction::*, Note, *};
+use phoenix_core::*;
+
+use super::*;
 
 const WFCT_INPUT_SIZE: usize =
     JubJubAffine::SIZE + u64::SIZE + JubJubScalar::SIZE;
@@ -163,14 +165,17 @@ pub fn get_unstake_call_data(args: i32, len: i32) -> i64 {
     };
 
     let sk = derive_sk(&seed, sender_index);
-    let pk = PublicKey::from(&sk);
+    let public_key = PublicKey::from(&sk);
 
-    let signature = unstake_sign(&sk, &pk, counter, unstake_note);
+    let unstake_note = unstake_note.to_bytes();
+    let signature_message = unstake_signature_message(counter, unstake_note);
+
+    let signature = sk.sign(&public_key, &signature_message);
 
     let unstake = Unstake {
-        public_key: pk,
+        public_key,
         signature,
-        note: unstake_note,
+        note: unstake_note.to_vec(),
         proof,
     };
 
@@ -187,23 +192,4 @@ pub fn get_unstake_call_data(args: i32, len: i32) -> i64 {
         method,
         payload,
     })
-}
-
-/// Creates a signature compatible with what the stake contract expects for a
-/// unstake transaction.
-///
-/// The counter is the number of transactions that have been sent to the
-/// transfer contract by a given key, and is reported in `StakeInfo`.
-fn unstake_sign(
-    sk: &SecretKey,
-    pk: &PublicKey,
-    counter: u64,
-    note: Note,
-) -> BlsSignature {
-    let mut msg: Vec<u8> = Vec::with_capacity(u64::SIZE + Note::SIZE);
-
-    msg.extend(counter.to_bytes());
-    msg.extend(note.to_bytes());
-
-    sk.sign(pk, &msg)
 }
