@@ -7,14 +7,14 @@
 use crate::{key::*, types, utils, MAX_LEN};
 
 use alloc::string::String;
-use alloc::vec::Vec;
 use ff::Field;
 
-use dusk_bls12_381_sign::{PublicKey, SecretKey, Signature as BlsSignature};
-use dusk_bytes::Serializable;
+use dusk_bls12_381_sign::PublicKey;
 use dusk_jubjub::{BlsScalar, JubJubScalar};
 use dusk_pki::StealthAddress;
-use phoenix_core::{transaction::*, Note, *};
+use phoenix_core::*;
+
+use super::stake_contract_types::*;
 
 /// Get unstake call data
 #[no_mangle]
@@ -59,7 +59,8 @@ pub fn get_withdraw_call_data(args: i32, len: i32) -> i64 {
     let address: StealthAddress = sender_psk.gen_stealth_address(&withdraw_r);
     let nonce = BlsScalar::random(&mut *rng);
 
-    let signature = withdraw_sign(&sk, &pk, counter, address, nonce);
+    let msg = withdraw_signature_message(counter, address, nonce);
+    let signature = sk.sign(&pk, &msg);
 
     // Since we're not transferring value *to* the contract the crossover
     // shouldn't contain a value. As such the note used to created it should
@@ -111,26 +112,4 @@ pub fn get_withdraw_call_data(args: i32, len: i32) -> i64 {
         crossover,
         fee,
     })
-}
-
-/// Creates a signature compatible with what the stake contract expects for a
-/// withdraw transaction.
-///
-/// The counter is the number of transactions that have been sent to the
-/// transfer contract by a given key, and is reported in `StakeInfo`.
-fn withdraw_sign(
-    sk: &SecretKey,
-    pk: &PublicKey,
-    counter: u64,
-    address: StealthAddress,
-    nonce: BlsScalar,
-) -> BlsSignature {
-    let mut msg =
-        Vec::with_capacity(u64::SIZE + StealthAddress::SIZE + BlsScalar::SIZE);
-
-    msg.extend(counter.to_bytes());
-    msg.extend(address.to_bytes());
-    msg.extend(nonce.to_bytes());
-
-    sk.sign(pk, &msg)
 }
