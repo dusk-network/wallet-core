@@ -14,16 +14,15 @@ use core::convert::Infallible;
 use alloc::string::{FromUtf8Error, String};
 use alloc::vec::Vec;
 
-use dusk_bls12_381_sign::{PublicKey, SecretKey, Signature};
+use dusk_bls12_381_sign::PublicKey;
 use dusk_bytes::{Error as BytesError, Serializable};
 use dusk_jubjub::{BlsScalar, JubJubScalar};
 use dusk_pki::{
     Ownable, PublicSpendKey, SecretKey as SchnorrKey, SecretSpendKey,
-    StealthAddress,
 };
 use dusk_schnorr::Signature as SchnorrSignature;
 use ff::Field;
-use phoenix_core::transaction::*;
+use phoenix_core::transaction::{stct_signature_message, Transaction};
 use phoenix_core::{Error as PhoenixError, Fee, Note, NoteType};
 use rand_core::{CryptoRng, Error as RngError, RngCore};
 use rkyv::ser::serializers::{
@@ -33,6 +32,11 @@ use rkyv::ser::serializers::{
 use rkyv::validation::validators::CheckDeserializeError;
 use rkyv::Serialize;
 use rusk_abi::ContractId;
+use stake_contract_types::{
+    allow_signature_message, stake_signature_message,
+    unstake_signature_message, withdraw_signature_message,
+};
+use stake_contract_types::{Allow, Stake, Unstake, Withdraw};
 
 const MAX_INPUT_NOTES: usize = 4;
 
@@ -486,7 +490,8 @@ where
             .to_bytes()
             .to_vec();
 
-        let signature = stake_sign(&sk, &pk, stake.counter, value);
+        let msg = stake_signature_message(stake.counter, value);
+        let signature = sk.sign(&pk, &msg);
 
         let stake = Stake {
             public_key: pk,
@@ -535,7 +540,7 @@ where
             .store
             .retrieve_sk(staker_index)
             .map_err(Error::from_store_err)?;
-        let pk = PublicKey::from(&sk);
+        let public_key = PublicKey::from(&sk);
 
         let (inputs, outputs) = self.inputs_and_change_output(
             rng,
@@ -544,10 +549,14 @@ where
             gas_limit * gas_price,
         )?;
 
-        let stake =
-            self.state.fetch_stake(&pk).map_err(Error::from_state_err)?;
-        let (value, _) =
-            stake.amount.ok_or(Error::NotStaked { key: pk, stake })?;
+        let stake = self
+            .state
+            .fetch_stake(&public_key)
+            .map_err(Error::from_state_err)?;
+        let (value, _) = stake.amount.ok_or(Error::NotStaked {
+            key: public_key,
+            stake,
+        })?;
 
         let blinder = JubJubScalar::random(rng);
 
@@ -579,12 +588,16 @@ where
             .to_bytes()
             .to_vec();
 
-        let signature = unstake_sign(&sk, &pk, stake.counter, unstake_note);
+        let unstake_note = unstake_note.to_bytes();
+        let signature_message =
+            unstake_signature_message(stake.counter, unstake_note);
+
+        let signature = sk.sign(&public_key, &signature_message);
 
         let unstake = Unstake {
-            public_key: pk,
+            public_key,
             signature,
-            note: unstake_note,
+            note: unstake_note.to_vec(),
             proof: unstake_proof,
         };
 
@@ -652,7 +665,8 @@ where
         let address = sender_psk.gen_stealth_address(&withdraw_r);
         let nonce = BlsScalar::random(&mut *rng);
 
-        let signature = withdraw_sign(&sk, &pk, stake.counter, address, nonce);
+        let msg = withdraw_signature_message(stake.counter, address, nonce);
+        let signature = sk.sign(&pk, &msg);
 
         // Since we're not transferring value *to* the contract the crossover
         // shouldn't contain a value. As such the note used to created it should
@@ -729,7 +743,8 @@ where
             .fetch_stake(&owner_pk)
             .map_err(Error::from_state_err)?;
 
-        let signature = allow_sign(&owner_sk, &owner_pk, stake.counter, staker);
+        let msg = allow_signature_message(stake.counter, staker);
+        let signature = owner_sk.sign(&owner_pk, &msg);
 
         // Since we're not transferring value *to* the contract the crossover
         // shouldn't contain a value. As such the note used to created it should
@@ -889,85 +904,6 @@ fn pick_lexicographic<F: Fn(&[usize; MAX_INPUT_NOTES]) -> bool>(
     }
 
     None
-}
-
-/// Creates a signature compatible with what the stake contract expects for a
-/// stake transaction.
-///
-/// The counter is the number of transactions that have been sent to the
-/// transfer contract by a given key, and is reported in `StakeInfo`.
-fn stake_sign(
-    sk: &SecretKey,
-    pk: &PublicKey,
-    counter: u64,
-    value: u64,
-) -> Signature {
-    let mut msg = Vec::with_capacity(u64::SIZE + u64::SIZE);
-
-    msg.extend(counter.to_bytes());
-    msg.extend(value.to_bytes());
-
-    sk.sign(pk, &msg)
-}
-
-/// Creates a signature compatible with what the stake contract expects for a
-/// unstake transaction.
-///
-/// The counter is the number of transactions that have been sent to the
-/// transfer contract by a given key, and is reported in `StakeInfo`.
-fn unstake_sign(
-    sk: &SecretKey,
-    pk: &PublicKey,
-    counter: u64,
-    note: Note,
-) -> Signature {
-    let mut msg = Vec::with_capacity(u64::SIZE + Note::SIZE);
-
-    msg.extend(counter.to_bytes());
-    msg.extend(note.to_bytes());
-
-    sk.sign(pk, &msg)
-}
-
-/// Creates a signature compatible with what the stake contract expects for a
-/// withdraw transaction.
-///
-/// The counter is the number of transactions that have been sent to the
-/// transfer contract by a given key, and is reported in `StakeInfo`.
-fn withdraw_sign(
-    sk: &SecretKey,
-    pk: &PublicKey,
-    counter: u64,
-    address: StealthAddress,
-    nonce: BlsScalar,
-) -> Signature {
-    let mut msg =
-        Vec::with_capacity(u64::SIZE + StealthAddress::SIZE + BlsScalar::SIZE);
-
-    msg.extend(counter.to_bytes());
-    msg.extend(address.to_bytes());
-    msg.extend(nonce.to_bytes());
-
-    sk.sign(pk, &msg)
-}
-
-/// Creates a signature compatible with what the stake contract expects for a
-/// ADD_ALLOWLIST transaction.
-///
-/// The counter is the number of transactions that have been sent to the
-/// transfer contract by a given key, and is reported in `StakeInfo`.
-fn allow_sign(
-    sk: &SecretKey,
-    pk: &PublicKey,
-    counter: u64,
-    staker: &PublicKey,
-) -> Signature {
-    let mut msg = Vec::with_capacity(u64::SIZE + PublicKey::SIZE);
-
-    msg.extend(counter.to_bytes());
-    msg.extend(staker.to_bytes());
-
-    sk.sign(pk, &msg)
 }
 
 /// Generates an obfuscated note for the given public spend key.
