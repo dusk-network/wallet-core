@@ -12,6 +12,7 @@ use crate::{
 };
 
 use alloc::{
+    format,
     string::{String, ToString},
     vec::Vec,
 };
@@ -225,7 +226,7 @@ pub fn get_history(args: i32, len: i32) -> i64 {
                     block_height: note_data.block_height,
                     amount: note_amount - inputs_amount,
                     fee: gas_spent * t.fee().gas_price,
-                    id: hash_to_find.to_string(),
+                    id: transaction_hash(hash_to_find),
                 }),
             }
         } else {
@@ -254,6 +255,18 @@ pub fn get_history(args: i32, len: i32) -> i64 {
         .collect::<Vec<_>>();
 
     utils::into_ptr(types::GetHistoryResponse { history: ret })
+}
+
+fn transaction_hash(hash: BlsScalar) -> String {
+    let mut f = String::new();
+
+    let tmp = hash.to_bytes();
+
+    for &b in tmp.iter() {
+        f.push_str(&format!("{:02x}", b))
+    }
+
+    f
 }
 
 /// Serialize a unprovenTx we recieved from the wallet-core
