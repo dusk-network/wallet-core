@@ -21,13 +21,20 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 type Node = (Note, tx::Opening, u64, JubJubScalar);
+const MAX_ALLOC_LEN: u32 = 2u32.pow(24);
 
 /// Composes a `i64` from the provided arguments. This will be returned from the
 /// WASM module functions.
-pub const fn compose(success: bool, ptr: u32, len: u32) -> i64 {
+pub fn compose(success: bool, ptr: u32, len: u32) -> i64 {
+    assert!(
+        len <= MAX_ALLOC_LEN,
+        "len must be less than {MAX_ALLOC_LEN}"
+    );
+
     let success = (!success) as u64;
     let ptr = (ptr as u64) << 32;
-    let len = ((len as u64) << 48) >> 32;
+    let len = ((len as u64) << 40) >> 32;
+
     (success | ptr | len) as i64
 }
 
@@ -36,9 +43,9 @@ pub const fn compose(success: bool, ptr: u32, len: u32) -> i64 {
 /// - status: a boolean indicating the success of the operation
 /// - ptr: a pointer to the underlying data
 /// - len: the length of the underlying data
-pub const fn decompose(result: i64) -> (bool, u32, u32) {
+pub fn decompose(result: i64) -> (bool, u32, u32) {
     let ptr = (result >> 32) as u32;
-    let len = ((result & 0xFFFFFF00) >> 16) as u32;
+    let len = ((result & 0xFFFFFFF0) >> 8) as u32;
     let success = ((result << 63) >> 63) == 0;
 
     (success, ptr, len)
@@ -76,13 +83,8 @@ pub fn sanitize_rng_seed(bytes: Vec<u8>) -> Option<[u8; 32]> {
 }
 
 /// Fails the operation
-pub const fn fail() -> i64 {
+pub fn fail() -> i64 {
     compose(false, 0, 0)
-}
-
-/// fail
-pub const fn fail_with() -> i64 {
-    compose(true, 0, 0)
 }
 
 /// Converts the provided response into an allocated pointer and returns the
