@@ -1384,7 +1384,7 @@
     "TransactionHistoryType": {
       "description": "The type of the transaction history",
       "type": "object",
-      "required": ["direction", "block_height", "fee", "amount", "id"],
+      "required": ["direction", "block_height", "fee", "amount", "id", "tx_type"],
       "properties": {
         "direction": {
           "description": "The direction of the transaction, in or out",
@@ -1404,6 +1404,10 @@
           "description": "The amount of the transaction",
           "type": "number",
           "format": "uint64"
+        },
+        "tx_type": {
+          "description": "The type of the transaction",
+          "type": "string"
         },
         "id": {
           "description": "The hash of the transaction",

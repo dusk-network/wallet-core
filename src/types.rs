@@ -494,6 +494,8 @@ pub struct TransactionHistoryType {
     pub fee: u64,
     #[doc = " The hash of the transaction"]
     pub id: String,
+    #[doc = " The type of the transaction"]
+    pub tx_type: String,
 }
 #[doc = " Metadata of the transaction, used in calculating history"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

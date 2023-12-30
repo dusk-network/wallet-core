@@ -218,6 +218,8 @@ pub fn get_history(args: i32, len: i32) -> i64 {
                 true => types::TransactionDirectionType::Out,
                 false => types::TransactionDirectionType::In,
             };
+            let transaction_type =
+                transaction_type(t.call.as_ref().map(|(_, x, _)| x.as_str()));
             let hash_to_find = Hasher::digest(t.to_hash_input_bytes());
             match ret.iter_mut().find(|th| th.id == hash_to_find.to_string()) {
                 Some(tx) => tx.amount += note_amount,
@@ -226,6 +228,7 @@ pub fn get_history(args: i32, len: i32) -> i64 {
                     block_height: note_data.block_height,
                     amount: note_amount - inputs_amount,
                     fee: gas_spent * t.fee().gas_price,
+                    tx_type: transaction_type,
                     id: transaction_hash(hash_to_find),
                 }),
             }
@@ -267,6 +270,13 @@ fn transaction_hash(hash: BlsScalar) -> String {
     }
 
     f
+}
+
+fn transaction_type(method: Option<&str>) -> String {
+    match method {
+        None => String::from("TRANSFER"),
+        Some(x) => x.to_uppercase(),
+    }
 }
 
 /// Serialize a unprovenTx we recieved from the wallet-core
