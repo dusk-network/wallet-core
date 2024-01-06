@@ -64,6 +64,14 @@ where
     serde_json::from_str(&args).ok()
 }
 
+/// reads the raw bytes at the pointer for the length and returns what it reason
+pub fn take_args_raw(args: i32, len: i32) -> &'static [u8] {
+    let args = args as *mut u8;
+    let len = len as usize;
+
+    unsafe { core::slice::from_raw_parts(args, len) }
+}
+
 /// Sanitizes arbitrary bytes into well-formed seed.
 pub fn sanitize_seed(bytes: Vec<u8>) -> Option<[u8; RNG_SEED]> {
     (bytes.len() == RNG_SEED).then(|| {
@@ -113,6 +121,15 @@ where
         Err(_) => return fail(),
     };
 
+    let ptr = bytes.as_ptr() as u32;
+    let len = bytes.len() as u32;
+
+    mem::forget(bytes);
+    compose(true, ptr, len)
+}
+
+/// Returns the provided bytes as a pointer
+pub fn raw_into_ptr<T>(bytes: Vec<u8>) -> i64 {
     let ptr = bytes.as_ptr() as u32;
     let len = bytes.len() as u32;
 
@@ -250,6 +267,7 @@ fn pick_lexicographic<F: Fn(&[usize; MAX_INPUT_NOTES]) -> bool>(
 
     None
 }
+
 
 #[test]
 fn compose_works() {

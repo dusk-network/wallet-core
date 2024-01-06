@@ -13,7 +13,7 @@ use crate::{
 
 use dusk_bls12_381::BlsScalar;
 use dusk_bls12_381_sign::PublicKey;
-use phoenix_core::{transaction::TreeLeaf, Note};
+use phoenix_core::Note;
 
 use alloc::vec::Vec;
 
@@ -26,33 +26,6 @@ pub fn rkyv_u64(args: i32, len: i32) -> i64 {
     };
 
     utils::rkyv_into_ptr(value)
-}
-
-/// Get block_heignt a rkyv serialized note from a tree leaf
-#[no_mangle]
-pub fn rkyv_tree_leaf(args: i32, len: i32) -> i64 {
-    let types::RkyvTreeLeaf { bytes } = match utils::take_args(args, len) {
-        Some(a) => a,
-        None => return utils::fail(),
-    };
-
-    let TreeLeaf { block_height, note } = match rkyv::from_bytes(&bytes) {
-        Ok(n) => n,
-        Err(_) => return utils::fail(),
-    };
-
-    let last_pos = *note.pos();
-
-    let note = match rkyv::to_bytes::<_, MAX_LEN>(&note).ok() {
-        Some(t) => t.into_vec(),
-        None => return utils::fail(),
-    };
-
-    utils::into_ptr(types::RkyvTreeLeafResponse {
-        block_height,
-        note,
-        last_pos,
-    })
 }
 
 /// Convert a Vec<Note> (where note is a U8initArray into a rkyv serialized
