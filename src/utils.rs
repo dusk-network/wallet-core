@@ -268,7 +268,6 @@ fn pick_lexicographic<F: Fn(&[usize; MAX_INPUT_NOTES]) -> bool>(
     None
 }
 
-
 #[test]
 fn compose_works() {
     assert_eq!(decompose(compose(true, 0, 0)), (true, 0, 0));
