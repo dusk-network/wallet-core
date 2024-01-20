@@ -65,7 +65,7 @@ where
 }
 
 /// reads the raw bytes at the pointer for the length and returns what it reason
-pub fn take_args_raw(args: i32, len: i32) -> &'static [u8] {
+pub fn take_args_raw<'a>(args: i32, len: i32) -> &'a [u8] {
     let args = args as *mut u8;
     let len = len as usize;
 

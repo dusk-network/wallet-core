@@ -57,7 +57,6 @@ hex = { version = "0.4", default_features = false, features = ["alloc"] }
 hashbrown = "0.14.3"
 stake-contract-types = "0.0.1-rc.2"
 
-
 [features]
 # rust platforms can use this module without the compact feature
 default = ["compat"]
@@ -78,4 +77,6 @@ schemafy_lib = "0.6"
 
 [profile.release]
 lto = true
+codegen-units = 1
 opt-level = 'z'
+wasm-opt = ['-O3']
