@@ -448,32 +448,29 @@
         }
       }
     },
-    "RkyvTreeLeafResponse": {
-      "description": "The response of the public_spend_keys function",
+    "RkyvTreeLeafArgs": {
+      "description": "The arguments of the rkyv tree leaf function",
       "type": "object",
       "required": [
-        "block_height",
-        "note",
-        "last_pos"
+        "bytes",
+        "seed"
       ],
       "properties": {
-        "block_height": {
-          "description": "The block height of the note.",
-          "type": "integer",
-          "format": "uint64"
-        },
-        "note": {
-          "description": "Bytes of note at the block_height",
+        "bytes": {
+          "description": "Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf",
           "type": "array",
           "items": {
             "type": "integer",
             "format": "uint8"
           }
         },
-        "last_pos": {
-          "description": "Last position of the note",
-          "type": "integer",
-          "format": "uint64"
+        "seed": {
+          "description": "Seed used to derive the keys of the wallet",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
         }
       }
     },
@@ -576,49 +573,48 @@
         }
       }
     },
-    "CheckNoteOwnershipArgs": {
-      "description": "Arguments of the check_note_ownership function",
-      "type": "object",
-      "required": ["note", "seed"],
-      "properties": {
-        "note": {
-          "description": "A singular note we want to check the validity of",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "uint8"
-          }
-        },
-        "seed": {
-          "description": "The seed to generate the view keys from",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "uint8"
-          }
-        }
-      }
-    },
     "CheckNoteOwnershipResponse": {
       "description": "Response of check_note_ownership function",
       "type": "object",
-      "required": ["is_owned", "nullifier"],
+      "required": ["notes", "last_pos", "block_heights", "public_spend_keys", "nullifiers"],
       "properties": {
-        "is_owned": {
-          "description": "Is the note owned by any of the view keys in the provided seed",
-          "type": "boolean"
-        },
-        "nullifier": {
-          "description": "Nullifier of the note that we were checking the ownership of",
+        "notes": {
+          "description": "The raw owned note",
           "type": "array",
           "items": {
-            "type": "integer",
-            "format": "uint8"
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
           }
         },
-        "public_spend_key": {
-          "description": "A base 58 encoded public spend key string",
+        "last_pos": {
+          "description": "The last position of the note",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "block_heights": {
+          "description": "The block heights of the notes in the same order the notes were returned seperated by comma",
           "type": "string"
+        },
+        "public_spend_keys": {
+          "description": "The public spend keys of the notes in the same order the notes were returned",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nullifiers": {
+          "description": "The nullifiers of the notes in the same order the notes were returned",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
+          }
         }
       }
     },

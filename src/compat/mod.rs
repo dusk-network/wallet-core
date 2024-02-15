@@ -4,8 +4,6 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
-/// Includes functions to interact with the stake contract allow tx
-pub mod allow;
 /// Helping us with the crypto primitives
 pub mod crypto;
 /// Includes methods to deal with bip39::Mnemonic
@@ -24,8 +22,8 @@ pub mod withdraw;
 
 mod stake_contract_types {
     pub use stake_contract_types::{
-        allow_signature_message, stake_signature_message,
-        unstake_signature_message, withdraw_signature_message,
+        stake_signature_message, unstake_signature_message,
+        withdraw_signature_message,
     };
-    pub use stake_contract_types::{Allow, Stake, Unstake, Withdraw};
+    pub use stake_contract_types::{Stake, Unstake, Withdraw};
 }

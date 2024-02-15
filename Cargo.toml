@@ -1,10 +1,10 @@
 [package]
 name = "dusk-wallet-core"
-version = "0.21.6"
+version = "0.21.8"
 edition = "2021"
 description = "The core functionality of the Dusk wallet"
 license = "MPL-2.0"
-respository = "https://github.com/dusk-network/wallet-core"
+repository = "https://github.com/dusk-network/wallet-core"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -57,7 +57,6 @@ hex = { version = "0.4", default_features = false, features = ["alloc"] }
 hashbrown = "0.14.3"
 stake-contract-types = "0.0.1-rc.2"
 
-
 [features]
 # rust platforms can use this module without the compact feature
 default = ["compat"]
@@ -75,3 +74,9 @@ wasmer = "=3.1"
 
 [build-dependencies]
 schemafy_lib = "0.6"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 'z'
+wasm-opt = ['-O3']
