@@ -70,12 +70,6 @@ pub fn rkyv_bls_scalar_array(args: i32, len: i32) -> i64 {
         }
     }
 
-    let bls_scalars =
-        match rkyv::to_bytes::<Vec<BlsScalar>, MAX_LEN>(&bls_scalars).ok() {
-            Some(v) => v.to_vec(),
-            None => return utils::fail(),
-        };
-
     utils::rkyv_into_ptr(bls_scalars)
 }
 
