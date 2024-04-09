@@ -6,17 +6,16 @@
 
 //! Mocks of the traits supplied by the user of the crate..
 
-use dusk_bls12_381_sign::PublicKey;
+use bls12_381_bls::PublicKey as StakePublicKey;
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_pki::{PublicSpendKey, ViewKey};
 use dusk_plonk::prelude::Proof;
-use dusk_schnorr::Signature;
 use dusk_wallet_core::{
     EnrichedNote, ProverClient, StakeInfo, StateClient, Store, Transaction,
     UnprovenTransaction, Wallet, POSEIDON_TREE_DEPTH,
 };
 use ff::Field;
-use phoenix_core::{Crossover, Fee, Note, NoteType};
+use jubjub_schnorr::Signature;
+use phoenix_core::{Crossover, Fee, Note, NoteType, PublicKey, ViewKey};
 use poseidon_merkle::{Item, Opening as PoseidonOpening, Tree};
 use rand_core::{CryptoRng, RngCore};
 
@@ -43,9 +42,9 @@ pub fn mock_wallet<Rng: RngCore + CryptoRng>(
     note_values: &[u64],
 ) -> Wallet<TestStore, TestStateClient, TestProverClient> {
     let store = TestStore::new(rng);
-    let psk = store.retrieve_ssk(0).unwrap().public_spend_key();
+    let pk = PublicKey::from(store.retrieve_sk(0).unwrap());
 
-    let notes = new_notes(rng, &psk, note_values);
+    let notes = new_notes(rng, &pk, note_values);
     let anchor = BlsScalar::random(&mut *rng);
     let opening = default_opening();
 
@@ -62,9 +61,9 @@ pub fn mock_canon_wallet<Rng: RngCore + CryptoRng>(
     note_values: &[u64],
 ) -> Wallet<TestStore, TestStateClient, RkyvProverClient> {
     let store = TestStore::new(rng);
-    let psk = store.retrieve_ssk(0).unwrap().public_spend_key();
+    let pk = PublicKey::from(store.retrieve_sk(0).unwrap());
 
-    let notes = new_notes(rng, &psk, note_values);
+    let notes = new_notes(rng, &pk, note_values);
     let anchor = BlsScalar::random(&mut *rng);
     let opening = default_opening();
 
@@ -83,9 +82,9 @@ pub fn mock_serde_wallet<Rng: RngCore + CryptoRng>(
     note_values: &[u64],
 ) -> Wallet<TestStore, TestStateClient, SerdeProverClient> {
     let store = TestStore::new(rng);
-    let psk = store.retrieve_ssk(0).unwrap().public_spend_key();
+    let pk = PublicKey::from(store.retrieve_sk(0).unwrap());
 
-    let notes = new_notes(rng, &psk, note_values);
+    let notes = new_notes(rng, &pk, note_values);
     let anchor = BlsScalar::random(&mut *rng);
     let opening = default_opening();
 
@@ -100,14 +99,14 @@ pub fn mock_serde_wallet<Rng: RngCore + CryptoRng>(
 /// Returns obfuscated notes with the given value.
 fn new_notes<Rng: RngCore + CryptoRng>(
     rng: &mut Rng,
-    psk: &PublicSpendKey,
+    pk: &PublicKey,
     note_values: &[u64],
 ) -> Vec<EnrichedNote> {
     note_values
         .iter()
         .map(|val| {
-            let blinder = JubJubScalar::random(rng);
-            (Note::new(rng, NoteType::Obfuscated, psk, *val, blinder), 0)
+            let blinder = JubJubScalar::random(&mut *rng);
+            (Note::new(rng, NoteType::Obfuscated, pk, *val, blinder), 0)
         })
         .collect()
 }
@@ -186,7 +185,10 @@ impl StateClient for TestStateClient {
         Ok(self.opening)
     }
 
-    fn fetch_stake(&self, _pk: &PublicKey) -> Result<StakeInfo, Self::Error> {
+    fn fetch_stake(
+        &self,
+        _stake_pk: &StakePublicKey,
+    ) -> Result<StakeInfo, Self::Error> {
         Ok(StakeInfo {
             amount: Some((100, 0)),
             reward: 0,
@@ -308,7 +310,7 @@ impl ProverClient for SerdeProverClient {
             assert_eq!(input.note(), cinput.note());
             assert_eq!(input.value(), cinput.value());
             assert_eq!(input.blinding_factor(), cinput.blinding_factor());
-            assert_eq!(input.pk_r_prime(), cinput.pk_r_prime());
+            assert_eq!(input.note_pk_prime(), cinput.note_pk_prime());
             // assert_eq!(input.signature(), cinput.signature());
         }
 

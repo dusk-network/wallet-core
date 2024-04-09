@@ -59,6 +59,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update `dusk-jubjub` `0.12` -> `0.13`
 - Update `poseidon-merkle` `0.2.1-rc.0` -> `0.3`
 - Update `rusk-abi` `0.10.0-piecrust.0.6` -> `0.11`
+- Update dependencies
+- Update `phoenix-core`: 0.21 -> 0.26
+- Update `dusk-jubjub`: 0.13 -> 0.14
+- Replace `dusk-schnorr` with `jubjub-schnorr` 0.2
+- Replace `dusk-bls12_381-sign` with `bls12_381-bls` 0.2
+- Update `dusk-poseidon` 0.31 -> 0.33
+- Update `dusk-plonk` 0.16 -> 0.19
+- Update `poseidon-merkle` 0.3 -> 0.5
+- Rename `Wallet::public_key` to `Wallet::stake_public_key`
+- Rename `Wallet::public_spend_key` to `Wallet::public_key`
+- Rename `derive_sk` to `derive_stake_sk`
+- Rename `derive_ssk` to `derive_sk`
+- Rename `retrieve_sk` to `retrieve_stake_sk`
+- Rename `retrieve_ssk` to `retrieve_sk`
+- Rename `ffi::public_spend_key` to `ffi::public_key`
+- Rename `UnprovenTransactionInput::pk_r` to `note_pk_prime`
 
 ### Fixed
 
@@ -70,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Remove `get_block_height` from the `StateClient` trait [#58]
 - Delete `extend_stake` since the stake contract removed it [#46]
+- Remove `dusk-pki` dependency
 
 ## [0.5.1] - 2021-01-26
 

@@ -13,14 +13,12 @@ use core::mem;
 use core::num::NonZeroU32;
 use core::ptr;
 
-use dusk_bls12_381_sign::PublicKey;
-use dusk_bytes::Write;
-use dusk_bytes::{DeserializableSlice, Serializable};
+use bls12_381_bls::PublicKey as StakePublicKey;
+use dusk_bytes::{DeserializableSlice, Serializable, Write};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_pki::{PublicSpendKey, ViewKey};
 use dusk_plonk::prelude::Proof;
-use dusk_schnorr::Signature;
-use phoenix_core::{Crossover, Fee, Note};
+use jubjub_schnorr::Signature;
+use phoenix_core::{Crossover, Fee, Note, PublicKey, ViewKey};
 use poseidon_merkle::Opening as PoseidonOpening;
 use rand_core::{
     impls::{next_u32_via_fill, next_u64_via_fill},
@@ -85,7 +83,7 @@ extern "C" {
     /// sequence, little endian, to the given buffer. If there is no value and
     /// eligibility, the first 16 bytes should be zero.
     fn fetch_stake(
-        pk: *const [u8; PublicKey::SIZE],
+        stake_pk: *const [u8; StakePublicKey::SIZE],
         stake: *mut [u8; StakeInfo::SIZE],
     ) -> u8;
 
@@ -142,12 +140,12 @@ pub unsafe extern "C" fn free(ptr: *mut u8, cap: u32) {
 
 /// Get the public spend key with the given index.
 #[no_mangle]
-pub unsafe extern "C" fn public_spend_key(
+pub unsafe extern "C" fn public_key(
     index: *const u64,
-    psk: *mut [u8; PublicSpendKey::SIZE],
+    pk: *mut [u8; PublicKey::SIZE],
 ) -> u8 {
-    let key = unwrap_or_bail!(WALLET.public_spend_key(*index)).to_bytes();
-    ptr::copy_nonoverlapping(&key[0], &mut (*psk)[0], key.len());
+    let key = unwrap_or_bail!(WALLET.public_key(*index)).to_bytes();
+    ptr::copy_nonoverlapping(&key[0], &mut (*pk)[0], key.len());
     0
 }
 
@@ -160,7 +158,7 @@ pub unsafe extern "C" fn execute(
     call_data_ptr: *mut u8,
     call_data_len: *const u32,
     sender_index: *const u64,
-    refund: *const [u8; PublicSpendKey::SIZE],
+    refund: *const [u8; PublicKey::SIZE],
     gas_limit: *const u64,
     gas_price: *const u64,
 ) -> u8 {
@@ -182,7 +180,7 @@ pub unsafe extern "C" fn execute(
         call_data_len as usize,
     );
 
-    let refund = unwrap_or_bail!(PublicSpendKey::from_bytes(&*refund));
+    let refund = unwrap_or_bail!(PublicKey::from_bytes(&*refund));
 
     unwrap_or_bail!(WALLET.execute(
         &mut FfiRng,
@@ -202,15 +200,15 @@ pub unsafe extern "C" fn execute(
 #[no_mangle]
 pub unsafe extern "C" fn transfer(
     sender_index: *const u64,
-    refund: *const [u8; PublicSpendKey::SIZE],
-    receiver: *const [u8; PublicSpendKey::SIZE],
+    refund: *const [u8; PublicKey::SIZE],
+    receiver: *const [u8; PublicKey::SIZE],
     value: *const u64,
     gas_limit: *const u64,
     gas_price: *const u64,
     ref_id: Option<&u64>,
 ) -> u8 {
-    let refund = unwrap_or_bail!(PublicSpendKey::from_bytes(&*refund));
-    let receiver = unwrap_or_bail!(PublicSpendKey::from_bytes(&*receiver));
+    let refund = unwrap_or_bail!(PublicKey::from_bytes(&*refund));
+    let receiver = unwrap_or_bail!(PublicKey::from_bytes(&*receiver));
 
     let ref_id =
         BlsScalar::from(ref_id.copied().unwrap_or_else(|| FfiRng.next_u64()));
@@ -234,12 +232,12 @@ pub unsafe extern "C" fn transfer(
 pub unsafe extern "C" fn stake(
     sender_index: *const u64,
     staker_index: *const u64,
-    refund: *const [u8; PublicSpendKey::SIZE],
+    refund: *const [u8; PublicKey::SIZE],
     value: *const u64,
     gas_limit: *const u64,
     gas_price: *const u64,
 ) -> u8 {
-    let refund = unwrap_or_bail!(PublicSpendKey::from_bytes(&*refund));
+    let refund = unwrap_or_bail!(PublicKey::from_bytes(&*refund));
 
     unwrap_or_bail!(WALLET.stake(
         &mut FfiRng,
@@ -259,11 +257,11 @@ pub unsafe extern "C" fn stake(
 pub unsafe extern "C" fn unstake(
     sender_index: *const u64,
     staker_index: *const u64,
-    refund: *const [u8; PublicSpendKey::SIZE],
+    refund: *const [u8; PublicKey::SIZE],
     gas_limit: *const u64,
     gas_price: *const u64,
 ) -> u8 {
-    let refund = unwrap_or_bail!(PublicSpendKey::from_bytes(&*refund));
+    let refund = unwrap_or_bail!(PublicKey::from_bytes(&*refund));
 
     unwrap_or_bail!(WALLET.unstake(
         &mut FfiRng,
@@ -283,11 +281,11 @@ pub unsafe extern "C" fn unstake(
 pub unsafe extern "C" fn withdraw(
     sender_index: *const u64,
     staker_index: *const u64,
-    refund: *const [u8; PublicSpendKey::SIZE],
+    refund: *const [u8; PublicKey::SIZE],
     gas_limit: *const u64,
     gas_price: *const u64,
 ) -> u8 {
-    let refund = unwrap_or_bail!(PublicSpendKey::from_bytes(&*refund));
+    let refund = unwrap_or_bail!(PublicKey::from_bytes(&*refund));
 
     unwrap_or_bail!(WALLET.withdraw(
         &mut FfiRng,
@@ -304,10 +302,10 @@ pub unsafe extern "C" fn withdraw(
 /// Gets the balance of a secret spend key.
 #[no_mangle]
 pub unsafe extern "C" fn get_balance(
-    ssk_index: *const u64,
+    sk_index: *const u64,
     balance: *mut [u8; BalanceInfo::SIZE],
 ) -> u8 {
-    let b = unwrap_or_bail!(WALLET.get_balance(*ssk_index)).to_bytes();
+    let b = unwrap_or_bail!(WALLET.get_balance(*sk_index)).to_bytes();
     ptr::copy_nonoverlapping(&b[0], &mut (*balance)[0], b.len());
     0
 }
@@ -496,12 +494,15 @@ impl StateClient for FfiStateClient {
         Ok(branch)
     }
 
-    fn fetch_stake(&self, pk: &PublicKey) -> Result<StakeInfo, Self::Error> {
-        let pk = pk.to_bytes();
+    fn fetch_stake(
+        &self,
+        stake_pk: &StakePublicKey,
+    ) -> Result<StakeInfo, Self::Error> {
+        let stake_pk = stake_pk.to_bytes();
         let mut stake_buf = [0u8; StakeInfo::SIZE];
 
         unsafe {
-            let r = fetch_stake(&pk, &mut stake_buf);
+            let r = fetch_stake(&stake_pk, &mut stake_buf);
             if r != 0 {
                 return Err(r);
             }
