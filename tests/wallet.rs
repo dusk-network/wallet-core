@@ -37,12 +37,12 @@ fn serde() {
 
     let wallet = mock_serde_wallet(&mut rng, &[2500, 2500, 5000]);
 
-    let send_psk = wallet.public_spend_key(0).unwrap();
-    let recv_psk = wallet.public_spend_key(1).unwrap();
+    let send_pk = wallet.public_key(0).unwrap();
+    let recv_pk = wallet.public_key(1).unwrap();
 
     let ref_id = BlsScalar::random(&mut rng);
     wallet
-        .transfer(&mut rng, 0, &send_psk, &recv_psk, 100, 100, 1, ref_id)
+        .transfer(&mut rng, 0, &send_pk, &recv_pk, 100, 100, 1, ref_id)
         .expect("Transaction creation to be successful");
 }
 
@@ -52,12 +52,12 @@ fn canon() {
 
     let wallet = mock_canon_wallet(&mut rng, &[2500, 2500, 5000]);
 
-    let send_psk = wallet.public_spend_key(0).unwrap();
-    let recv_psk = wallet.public_spend_key(1).unwrap();
+    let send_pk = wallet.public_key(0).unwrap();
+    let recv_pk = wallet.public_key(1).unwrap();
 
     let ref_id = BlsScalar::random(&mut rng);
     wallet
-        .transfer(&mut rng, 0, &send_psk, &recv_psk, 100, 100, 1, ref_id)
+        .transfer(&mut rng, 0, &send_pk, &recv_pk, 100, 100, 1, ref_id)
         .expect("Transaction creation to be successful");
 }
 
@@ -67,12 +67,12 @@ fn transfer() {
 
     let wallet = mock_wallet(&mut rng, &[2500, 2500, 5000]);
 
-    let send_psk = wallet.public_spend_key(0).unwrap();
-    let recv_psk = wallet.public_spend_key(1).unwrap();
+    let send_pk = wallet.public_key(0).unwrap();
+    let recv_pk = wallet.public_key(1).unwrap();
 
     let ref_id = BlsScalar::random(&mut rng);
     wallet
-        .transfer(&mut rng, 0, &send_psk, &recv_psk, 100, 100, 1, ref_id)
+        .transfer(&mut rng, 0, &send_pk, &recv_pk, 100, 100, 1, ref_id)
         .expect("Transaction creation to be successful");
 }
 

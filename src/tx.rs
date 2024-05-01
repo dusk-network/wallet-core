@@ -12,12 +12,11 @@ use alloc::vec::Vec;
 use dusk_bytes::{
     DeserializableSlice, Error as BytesError, Serializable, Write,
 };
-use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubExtended};
-use dusk_pki::{Ownable, SecretSpendKey};
-use dusk_plonk::prelude::{JubJubScalar, Proof};
-use dusk_schnorr::Proof as SchnorrSig;
+use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubExtended, JubJubScalar};
+use dusk_plonk::prelude::Proof;
+use jubjub_schnorr::SignatureDouble;
 use phoenix_core::transaction::Transaction;
-use phoenix_core::{Crossover, Fee, Note};
+use phoenix_core::{Crossover, Fee, Note, Ownable, SecretKey};
 use poseidon_merkle::Opening as PoseidonOpening;
 use rand_core::{CryptoRng, RngCore};
 use rusk_abi::hash::Hasher;
@@ -31,25 +30,25 @@ pub struct UnprovenTransactionInput {
     note: Note,
     value: u64,
     blinder: JubJubScalar,
-    pk_r_prime: JubJubExtended,
-    sig: SchnorrSig,
+    npk_prime: JubJubExtended,
+    sig: SignatureDouble,
 }
 
 impl UnprovenTransactionInput {
     fn new<Rng: RngCore + CryptoRng>(
         rng: &mut Rng,
-        ssk: &SecretSpendKey,
+        sk: &SecretKey,
         note: Note,
         value: u64,
         blinder: JubJubScalar,
         opening: PoseidonOpening<(), POSEIDON_TREE_DEPTH, 4>,
         tx_hash: BlsScalar,
     ) -> Self {
-        let nullifier = note.gen_nullifier(ssk);
-        let sk_r = ssk.sk_r(note.stealth_address());
-        let sig = SchnorrSig::new(&sk_r, rng, tx_hash);
+        let nullifier = note.gen_nullifier(sk);
+        let nsk = sk.sk_r(note.stealth_address());
+        let sig = nsk.sign_double(rng, tx_hash);
 
-        let pk_r_prime = dusk_jubjub::GENERATOR_NUMS_EXTENDED * sk_r.as_ref();
+        let npk_prime = dusk_jubjub::GENERATOR_NUMS_EXTENDED * nsk.as_ref();
 
         Self {
             note,
@@ -58,13 +57,13 @@ impl UnprovenTransactionInput {
             sig,
             nullifier,
             opening,
-            pk_r_prime,
+            npk_prime,
         }
     }
 
     /// Serialize the input to a variable size byte buffer.
     pub fn to_var_bytes(&self) -> Vec<u8> {
-        let affine_pkr = JubJubAffine::from(&self.pk_r_prime);
+        let affine_npk_p = JubJubAffine::from(&self.npk_prime);
 
         let opening_bytes = rkyv::to_bytes::<_, 256>(&self.opening)
             .expect("Rkyv serialization should always succeed for an opening")
@@ -74,7 +73,7 @@ impl UnprovenTransactionInput {
             BlsScalar::SIZE
                 + Note::SIZE
                 + JubJubAffine::SIZE
-                + SchnorrSig::SIZE
+                + SignatureDouble::SIZE
                 + u64::SIZE
                 + JubJubScalar::SIZE
                 + opening_bytes.len(),
@@ -84,7 +83,7 @@ impl UnprovenTransactionInput {
         bytes.extend_from_slice(&self.note.to_bytes());
         bytes.extend_from_slice(&self.value.to_bytes());
         bytes.extend_from_slice(&self.blinder.to_bytes());
-        bytes.extend_from_slice(&affine_pkr.to_bytes());
+        bytes.extend_from_slice(&affine_npk_p.to_bytes());
         bytes.extend_from_slice(&self.sig.to_bytes());
         bytes.extend(opening_bytes);
 
@@ -99,9 +98,9 @@ impl UnprovenTransactionInput {
         let note = Note::from_reader(&mut bytes)?;
         let value = u64::from_reader(&mut bytes)?;
         let blinder = JubJubScalar::from_reader(&mut bytes)?;
-        let pk_r_prime =
+        let npk_prime =
             JubJubExtended::from(JubJubAffine::from_reader(&mut bytes)?);
-        let sig = SchnorrSig::from_reader(&mut bytes)?;
+        let sig = SignatureDouble::from_reader(&mut bytes)?;
 
         // `to_vec` is required here otherwise `rkyv` will throw an alignment
         // error
@@ -116,7 +115,7 @@ impl UnprovenTransactionInput {
             sig,
             nullifier,
             opening,
-            pk_r_prime,
+            npk_prime,
         })
     }
 
@@ -145,13 +144,13 @@ impl UnprovenTransactionInput {
         self.blinder
     }
 
-    /// Returns the input's pk_r'.
-    pub fn pk_r_prime(&self) -> JubJubExtended {
-        self.pk_r_prime
+    /// Returns the input's note public key prime.
+    pub fn note_pk_prime(&self) -> JubJubExtended {
+        self.npk_prime
     }
 
     /// Returns the input's signature.
-    pub fn signature(&self) -> &SchnorrSig {
+    pub fn signature(&self) -> &SignatureDouble {
         &self.sig
     }
 }
@@ -174,7 +173,7 @@ impl UnprovenTransaction {
     pub(crate) fn new<Rng: RngCore + CryptoRng, SC: StateClient>(
         rng: &mut Rng,
         state: &SC,
-        sender: &SecretSpendKey,
+        sender: &SecretKey,
         inputs: Vec<(Note, u64, JubJubScalar)>,
         outputs: Vec<(Note, u64, JubJubScalar)>,
         fee: Fee,

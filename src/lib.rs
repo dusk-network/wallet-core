@@ -21,13 +21,12 @@ mod imp;
 mod tx;
 
 use alloc::vec::Vec;
-use dusk_bls12_381_sign::{PublicKey, SecretKey};
+use bls12_381_bls::{PublicKey as StakePublicKey, SecretKey as StakeSecretKey};
 use dusk_bytes::{DeserializableSlice, Serializable, Write};
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_pki::{SecretSpendKey, ViewKey};
-use dusk_plonk::proof_system::Proof;
-use dusk_schnorr::Signature;
-use phoenix_core::{Crossover, Fee, Note};
+use dusk_plonk::prelude::Proof;
+use jubjub_schnorr::Signature;
+use phoenix_core::{Crossover, Fee, Note, SecretKey, ViewKey};
 use poseidon_merkle::Opening as PoseidonOpening;
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
@@ -54,12 +53,12 @@ pub trait Store {
     /// Retrieves a derived secret spend key from the store.
     ///
     /// The provided implementation simply gets the seed and regenerates the key
-    /// every time with [`generate_ssk`]. It may be reimplemented to
+    /// every time with [`generate_sk`]. It may be reimplemented to
     /// provide a cache for keys, or implement a different key generation
     /// algorithm.
-    fn retrieve_ssk(&self, index: u64) -> Result<SecretSpendKey, Self::Error> {
+    fn retrieve_sk(&self, index: u64) -> Result<SecretKey, Self::Error> {
         let seed = self.get_seed()?;
-        Ok(derive_ssk(&seed, index))
+        Ok(derive_sk(&seed, index))
     }
 
     /// Retrieves a derived secret key from the store.
@@ -68,32 +67,16 @@ pub trait Store {
     /// every time with [`generate_sk`]. It may be reimplemented to
     /// provide a cache for keys, or implement a different key generation
     /// algorithm.
-    fn retrieve_sk(&self, index: u64) -> Result<SecretKey, Self::Error> {
+    fn retrieve_stake_sk(
+        &self,
+        index: u64,
+    ) -> Result<StakeSecretKey, Self::Error> {
         let seed = self.get_seed()?;
-        Ok(derive_sk(&seed, index))
+        Ok(derive_stake_sk(&seed, index))
     }
 }
 
 /// Generates a secret spend key from its seed and index.
-///
-/// First the `seed` and then the little-endian representation of the key's
-/// `index` are passed through SHA-256. A constant is then mixed in and the
-/// resulting hash is then used to seed a `ChaCha12` CSPRNG, which is
-/// subsequently used to generate the key.
-pub fn derive_ssk(seed: &[u8; 64], index: u64) -> SecretSpendKey {
-    let mut hash = Sha256::new();
-
-    hash.update(seed);
-    hash.update(index.to_le_bytes());
-    hash.update(b"SSK");
-
-    let hash = hash.finalize().into();
-    let mut rng = ChaCha12Rng::from_seed(hash);
-
-    SecretSpendKey::random(&mut rng)
-}
-
-/// Generates a secret key from its seed and index.
 ///
 /// First the `seed` and then the little-endian representation of the key's
 /// `index` are passed through SHA-256. A constant is then mixed in and the
@@ -104,12 +87,31 @@ pub fn derive_sk(seed: &[u8; 64], index: u64) -> SecretKey {
 
     hash.update(seed);
     hash.update(index.to_le_bytes());
-    hash.update(b"SK");
+    hash.update(b"SSK");
 
     let hash = hash.finalize().into();
     let mut rng = ChaCha12Rng::from_seed(hash);
 
     SecretKey::random(&mut rng)
+}
+
+/// Generates a secret key from its seed and index.
+///
+/// First the `seed` and then the little-endian representation of the key's
+/// `index` are passed through SHA-256. A constant is then mixed in and the
+/// resulting hash is then used to seed a `ChaCha12` CSPRNG, which is
+/// subsequently used to generate the key.
+pub fn derive_stake_sk(seed: &[u8; 64], index: u64) -> StakeSecretKey {
+    let mut hash = Sha256::new();
+
+    hash.update(seed);
+    hash.update(index.to_le_bytes());
+    hash.update(b"SK");
+
+    let hash = hash.finalize().into();
+    let mut rng = ChaCha12Rng::from_seed(hash);
+
+    StakeSecretKey::random(&mut rng)
 }
 
 /// Types that are client of the prover.
@@ -178,7 +180,10 @@ pub trait StateClient {
 
     /// Queries the node for the stake of a key. If the key has no stake, a
     /// `Default` stake info should be returned.
-    fn fetch_stake(&self, pk: &PublicKey) -> Result<StakeInfo, Self::Error>;
+    fn fetch_stake(
+        &self,
+        pk: &StakePublicKey,
+    ) -> Result<StakeInfo, Self::Error>;
 }
 
 /// Information about the balance of a particular key.
