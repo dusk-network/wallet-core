@@ -9,9 +9,8 @@ use crate::{key::*, types, utils, MAX_LEN};
 use alloc::string::String;
 use ff::Field;
 
-use dusk_bls12_381_sign::PublicKey;
+use bls12_381_bls::PublicKey as StakePublicKey;
 use dusk_jubjub::{BlsScalar, JubJubScalar};
-use dusk_pki::StealthAddress;
 use phoenix_core::*;
 
 use super::stake_contract_types::*;
@@ -49,15 +48,15 @@ pub fn get_withdraw_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sender_psk = derive_ssk(&seed, sender_index).public_spend_key();
-    let sk = derive_sk(&seed, owner_index);
-    let pk = PublicKey::from(&sk);
+    let sender_psk = derive_pk(&seed, sender_index);
+    let sk = derive_stake_sk(&seed, owner_index);
+    let pk = StakePublicKey::from(&sk);
 
     let rng = &mut utils::rng(rng_seed);
 
-    let withdraw_r = JubJubScalar::random(rng);
-    let address: StealthAddress = sender_psk.gen_stealth_address(&withdraw_r);
-    let nonce = BlsScalar::random(&mut *rng);
+    let withdraw_r = JubJubScalar::random(rng.clone());
+    let address = sender_psk.gen_stealth_address(&withdraw_r);
+    let nonce = BlsScalar::random(&mut rng.clone());
 
     let msg = withdraw_signature_message(counter, address, nonce);
     let signature = sk.sign(&pk, &msg);
@@ -65,8 +64,8 @@ pub fn get_withdraw_call_data(args: i32, len: i32) -> i64 {
     // Since we're not transferring value *to* the contract the crossover
     // shouldn't contain a value. As such the note used to created it should
     // be valueless as well.
-    let blinder = JubJubScalar::random(rng);
-    let note = Note::obfuscated(rng, &refund, 0, blinder);
+    let blinder = JubJubScalar::random(rng.clone());
+    let note = Note::obfuscated(&mut rng.clone(), &refund, 0, blinder);
     let (mut fee, crossover) = note
         .try_into()
         .expect("Obfuscated notes should always yield crossovers");

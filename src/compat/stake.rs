@@ -15,14 +15,16 @@ use crate::{
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use bls12_381_bls::PublicKey as StakePublicKey;
 use dusk_bls12_381::BlsScalar;
-use dusk_bls12_381_sign::PublicKey;
+
 use dusk_bytes::Serializable;
 use dusk_bytes::Write;
 use dusk_jubjub::JubJubScalar;
-use dusk_pki::{Ownable, SecretKey as SchnorrKey};
-use dusk_plonk::proof_system::Proof;
-use dusk_schnorr::Signature;
+use ff::Field;
+
+use dusk_plonk::prelude::Proof;
+use jubjub_schnorr::Signature;
 use phoenix_core::{
     transaction::{stct_signature_message, StakeData},
     *,
@@ -64,7 +66,7 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sender = derive_ssk(&seed, sender_index);
+    let sender = derive_sk(&seed, sender_index);
     let refund = match bs58_to_psk(&refund) {
         Some(a) => a,
         None => return utils::fail(),
@@ -72,7 +74,7 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
 
     let rng = &mut utils::rng(rng_seed);
 
-    let blinder = JubJubScalar::random(rng);
+    let blinder = JubJubScalar::random(&mut *rng);
     let note = Note::obfuscated(rng, &refund, value, blinder);
     let (mut fee, crossover) = note
         .try_into()
@@ -89,10 +91,9 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
     let stct_message = stct_signature_message(&crossover, value, contract_id);
     let stct_message = dusk_poseidon::sponge::hash(&stct_message);
 
-    let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
-    let secret = SchnorrKey::from(sk_r);
+    let nsk = sender.sk_r(fee.stealth_address());
 
-    let stct_signature = Signature::new(&secret, rng, stct_message);
+    let stct_signature = nsk.sign(rng, stct_message);
 
     let vec_allocation = allocate(STCT_INPUT_SIZE as i32) as *mut _;
     let mut buf: Vec<u8> = unsafe {
@@ -177,8 +178,8 @@ pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sk = derive_sk(&seed, staker_index);
-    let pk = PublicKey::from(&sk);
+    let sk = derive_stake_sk(&seed, staker_index);
+    let pk = StakePublicKey::from(&sk);
 
     let msg = stake_signature_message(counter, value);
     let signature = sk.sign(&pk, &msg);

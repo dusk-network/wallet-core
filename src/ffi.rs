@@ -10,7 +10,7 @@ use alloc::{vec, vec::Vec};
 use core::mem;
 
 use dusk_bytes::Serializable;
-use phoenix_core::{Fee, Note};
+use phoenix_core::{Fee, Note, ViewKey};
 use sha2::{Digest, Sha512};
 
 use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
@@ -182,7 +182,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
     let mut full_inputs = Vec::with_capacity(inputs.len());
 
     let view_key = key::derive_vk(&seed, sender_index);
-    let ssk = key::derive_ssk(&seed, sender_index);
+    let ssk = key::derive_sk(&seed, sender_index);
 
     'outer: for input in inputs {
         if let Ok(value) = input.value(Some(&view_key)) {
@@ -350,7 +350,7 @@ pub fn public_spend_keys(args: i32, len: i32) -> i64 {
     };
 
     let keys = (0..=MAX_KEY)
-        .map(|idx| key::derive_psk(&seed, idx as u64))
+        .map(|idx| key::derive_pk(&seed, idx as u64))
         .map(|psk| bs58::encode(psk.to_bytes()).into_string())
         .collect();
 
@@ -419,8 +419,8 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
         // decrypt the note. if any fails, returns false
         for idx in 0..=MAX_KEY {
             if keys_len == idx {
-                keys_ssk[idx] = key::derive_ssk(&seed, idx as u64);
-                keys[idx] = keys_ssk[idx].view_key();
+                keys_ssk[idx] = key::derive_sk(&seed, idx as u64);
+                keys[idx] = ViewKey::from(keys_ssk[idx]);
                 keys_len += 1;
             }
 

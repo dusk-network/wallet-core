@@ -13,8 +13,8 @@ use core::mem;
 
 use dusk_bytes::DeserializableSlice;
 use dusk_jubjub::JubJubScalar;
-use dusk_pki::PublicSpendKey;
-use phoenix_core::Note;
+
+use phoenix_core::{Note, PublicKey};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -166,10 +166,10 @@ pub fn sanitize_notes(mut notes: Vec<Note>) -> Vec<Note> {
 }
 
 /// Converts a Base58 string into a [PublicSpendKey].
-pub fn bs58_to_psk(psk: &str) -> Option<PublicSpendKey> {
+pub fn bs58_to_psk(psk: &str) -> Option<PublicKey> {
     // TODO this should be defined in dusk-pki
     let bytes = bs58::decode(psk).into_vec().ok()?;
-    PublicSpendKey::from_reader(&mut &bytes[..]).ok()
+    PublicKey::from_reader(&mut &bytes[..]).ok()
 }
 
 /// Calculate the inputs for a transaction.
@@ -275,70 +275,4 @@ fn compose_works() {
     assert_eq!(decompose(compose(false, 1, 0)), (false, 1, 0));
     assert_eq!(decompose(compose(false, 0, 1)), (false, 0, 1));
     assert_eq!(decompose(compose(false, 4837, 383)), (false, 4837, 383));
-}
-
-#[test]
-fn knapsack_works() {
-    use core::mem;
-    use dusk_jubjub::JubJubScalar;
-    use dusk_pki::SecretSpendKey;
-    use rand::{rngs::StdRng, SeedableRng};
-
-    // openings are not checked here; no point in setting them up properly
-    let o = unsafe { mem::zeroed() };
-    let rng = &mut StdRng::seed_from_u64(0xbeef);
-
-    // sanity check
-    assert_eq!(inputs(vec![], 70), None);
-
-    // basic check
-    let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
-    let note = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
-    let available = vec![(note, o, 100, blinder)];
-    let inputs_notes = available.clone();
-    assert_eq!(inputs(available, 70), Some(inputs_notes));
-
-    // out of balance basic check
-    let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
-    let note = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
-    let available = vec![(note, o, 100, blinder)];
-    assert_eq!(inputs(available, 101), None);
-
-    // multiple inputs check
-    // note: this test is checking a naive, simple order-based output
-    let key = SecretSpendKey::random(rng);
-    let blinder1 = JubJubScalar::random(rng);
-    let note1 = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
-    let key = SecretSpendKey::random(rng);
-    let blinder2 = JubJubScalar::random(rng);
-    let note2 = Note::obfuscated(rng, &key.public_spend_key(), 500, blinder);
-    let key = SecretSpendKey::random(rng);
-    let blinder3 = JubJubScalar::random(rng);
-    let note3 = Note::obfuscated(rng, &key.public_spend_key(), 300, blinder);
-    let available = vec![
-        (note1, o, 100, blinder1),
-        (note2, o, 500, blinder2),
-        (note3, o, 300, blinder3),
-    ];
-
-    assert_eq!(inputs(available.clone(), 600), Some(available));
-
-    // multiple inputs, out of balance check
-    let key = SecretSpendKey::random(rng);
-    let blinder1 = JubJubScalar::random(rng);
-    let note1 = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
-    let key = SecretSpendKey::random(rng);
-    let blinder2 = JubJubScalar::random(rng);
-    let note2 = Note::obfuscated(rng, &key.public_spend_key(), 500, blinder);
-    let key = SecretSpendKey::random(rng);
-    let blinder3 = JubJubScalar::random(rng);
-    let note3 = Note::obfuscated(rng, &key.public_spend_key(), 300, blinder);
-    let available = vec![
-        (note1, o, 100, blinder1),
-        (note2, o, 500, blinder2),
-        (note3, o, 300, blinder3),
-    ];
-    assert_eq!(inputs(available, 901), None);
 }

@@ -11,8 +11,8 @@ use crate::{
     utils, MAX_LEN,
 };
 
+use bls12_381_bls::PublicKey;
 use dusk_bls12_381::BlsScalar;
-use dusk_bls12_381_sign::PublicKey;
 use phoenix_core::Note;
 
 use alloc::vec::Vec;
@@ -145,7 +145,7 @@ fn get_public_key_rkyv_serialized(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sk = key::derive_sk(&seed, index);
+    let sk = key::derive_stake_sk(&seed, index);
 
     let pk = PublicKey::from(&sk);
 

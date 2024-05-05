@@ -1,2 +1,1 @@
 [target.wasm32-unknown-unknown]
-rustflags = ["-C", "target-feature=+simd128"]

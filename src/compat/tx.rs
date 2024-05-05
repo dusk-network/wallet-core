@@ -21,9 +21,9 @@ use dusk_bytes::{
     DeserializableSlice, Error as BytesError, Serializable, Write,
 };
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_plonk::proof_system::Proof;
-use dusk_schnorr::Proof as SchnorrSig;
+use dusk_plonk::prelude::Proof;
 use hashbrown::{hash_map::Entry, HashMap};
+use jubjub_schnorr::SignatureDouble;
 use phoenix_core::{transaction, Crossover, Fee, Note, Transaction};
 use rusk_abi::{hash::Hasher, ContractId, CONTRACT_ID_BYTES};
 
@@ -438,7 +438,7 @@ fn input_to_var_bytes(input: &tx::Input) -> Vec<u8> {
     let size = BlsScalar::SIZE
         + Note::SIZE
         + JubJubAffine::SIZE
-        + SchnorrSig::SIZE
+        + SignatureDouble::SIZE
         + u64::SIZE
         + JubJubScalar::SIZE
         + opening_bytes.len();
