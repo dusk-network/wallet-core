@@ -8,11 +8,13 @@ use crate::{key::*, types, utils, MAX_LEN};
 
 use alloc::string::String;
 
-use dusk_bls12_381_sign::PublicKey;
+use bls12_381_bls::PublicKey as StakePublicKey;
 use dusk_jubjub::JubJubScalar;
-use phoenix_core::{Note, *};
-
-use super::stake_contract_types::*;
+use ff::Field;
+use phoenix_core::{
+    transaction::{allow_signature_message, Allow},
+    Crossover, Fee, Note, PublicKey,
+};
 
 /// Get unstake call data
 #[no_mangle]
@@ -41,23 +43,23 @@ pub fn get_allow_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let refund: dusk_pki::PublicSpendKey = match utils::bs58_to_psk(&refund) {
+    let refund: PublicKey = match utils::bs58_to_pk(&refund) {
         Some(a) => a,
         None => return utils::fail(),
     };
 
-    let sk = derive_sk(&seed, owner_index);
-    let staker = PublicKey::from(&sk);
+    let stake_sk = derive_stake_sk(&seed, owner_index);
+    let staker_pk = StakePublicKey::from(&stake_sk);
 
-    let owner_sk = derive_sk(&seed, sender_index);
-    let owner_pk = PublicKey::from(&owner_sk);
+    let owner_sk = derive_stake_sk(&seed, sender_index);
+    let owner_pk = StakePublicKey::from(&owner_sk);
 
     let rng = &mut utils::rng(rng_seed);
 
-    let msg = allow_signature_message(counter, &staker);
+    let msg = allow_signature_message(counter, staker_pk);
     let signature = owner_sk.sign(&owner_pk, &msg);
 
-    let blinder = JubJubScalar::random(rng);
+    let blinder = JubJubScalar::random(&mut *rng);
     let note = Note::obfuscated(rng, &refund, 0, blinder);
     let (mut fee, crossover) = note
         .try_into()
@@ -67,7 +69,7 @@ pub fn get_allow_call_data(args: i32, len: i32) -> i64 {
     fee.gas_price = gas_price;
 
     let allow = Allow {
-        public_key: staker,
+        public_key: staker_pk,
         owner: owner_pk,
         signature,
     };

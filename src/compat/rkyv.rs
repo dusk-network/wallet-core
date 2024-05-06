@@ -11,8 +11,8 @@ use crate::{
     utils, MAX_LEN,
 };
 
+use bls12_381_bls::PublicKey as StakePublicKey;
 use dusk_bls12_381::BlsScalar;
-use dusk_bls12_381_sign::PublicKey;
 use phoenix_core::{transaction::TreeLeaf, Note};
 
 use alloc::vec::Vec;
@@ -163,11 +163,11 @@ pub fn rkyv_openings_array(args: i32, len: i32) -> i64 {
     utils::rkyv_into_ptr::<Vec<(tx::Opening, u64)>>(openings_vec)
 }
 
-/// Rkyv serialize public key to send to the node to obtain
+/// Rkyv serialize stake public key to send to the node to obtain
 /// stake-info
 #[no_mangle]
-fn get_public_key_rkyv_serialized(args: i32, len: i32) -> i64 {
-    let types::GetPublicKeyRkyvSerializedArgs { seed, index } =
+fn get_stake_pk_rkyv_serialized(args: i32, len: i32) -> i64 {
+    let types::GetStakePKrkyvSerializedArgs { seed, index } =
         match utils::take_args(args, len) {
             Some(a) => a,
             None => return utils::fail(),
@@ -178,9 +178,8 @@ fn get_public_key_rkyv_serialized(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sk = key::derive_sk(&seed, index);
+    let stake_sk = key::derive_stake_sk(&seed, index);
+    let stake_pk = StakePublicKey::from(&stake_sk);
 
-    let pk = PublicKey::from(&sk);
-
-    utils::rkyv_into_ptr::<PublicKey>(pk)
+    utils::rkyv_into_ptr::<StakePublicKey>(stake_pk)
 }
