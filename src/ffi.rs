@@ -6,7 +6,7 @@
 
 //! FFI bindings exposed to WASM module.
 
-use alloc::{vec, vec::Vec};
+use alloc::{format, vec, vec::Vec};
 use core::mem;
 
 use dusk_bytes::Serializable;
@@ -15,12 +15,16 @@ use sha2::{Digest, Sha512};
 
 use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
 
+use crate::printf;
+
 /// Allocates a buffer of `len` bytes on the WASM memory.
 #[no_mangle]
 pub fn allocate(len: i32) -> i32 {
     let bytes = vec![0u8; len as usize];
     let ptr = bytes.as_ptr();
     mem::forget(bytes);
+    let string = format!("allocated {:?}\n", ptr);
+    unsafe { printf(string.as_ptr() as _, string.len() as _) };
     ptr as i32
 }
 
@@ -29,6 +33,8 @@ pub fn allocate(len: i32) -> i32 {
 pub fn free_mem(ptr: i32, len: i32) {
     let ptr = ptr as *mut u8;
     let len = len as usize;
+    let string = format!("deallocated {:?}\n", ptr);
+    unsafe { printf(string.as_ptr() as _, string.len() as _) };
     unsafe {
         Vec::from_raw_parts(ptr, len, len);
     }

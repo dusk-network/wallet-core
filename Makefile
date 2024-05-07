@@ -19,6 +19,7 @@ wasm: ## Build the WASM files
 		--color=always \
 		-Z build-std=core,alloc,panic_abort \
 		-Z build-std-features=panic_immediate_abort
+	@rm assets/dusk_wallet_core.wasm
 	@cp target/wasm32-unknown-unknown/release/dusk_wallet_core.wasm \
 		assets/
 

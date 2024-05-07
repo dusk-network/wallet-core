@@ -10,6 +10,11 @@
 
 extern crate alloc;
 
+extern "C" {
+    /// print
+    pub fn printf(ptr: i32, len: i32);
+}
+
 #[cfg(feature = "compat")]
 /// compat module adds compatiblity functions for non rust platforms
 pub mod compat;

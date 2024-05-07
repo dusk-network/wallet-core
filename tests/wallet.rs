@@ -19,7 +19,10 @@ use phoenix_core::Crossover;
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use wasmer::{imports, Instance, Module, Store, Value};
+use wasmer::{
+    imports, AsStoreMut, AsStoreRef, Function, FunctionEnv, FunctionEnvMut,
+    Instance, Memory, Module, Store, Value,
+};
 
 #[test]
 fn seed_works() {
@@ -371,6 +374,7 @@ pub struct CallResult<'a> {
 impl<'a> CallResult<'a> {
     pub fn new(wallet: &'a mut Wallet, value: i64) -> Self {
         let (status, val, aux) = utils::decompose(value);
+        println!("status: {}, val: {}, aux: {}", status, val, aux);
         Self {
             status,
             val,
@@ -461,6 +465,10 @@ impl Wallet {
     }
 }
 
+struct Env {
+    memory: Option<Memory>,
+}
+
 impl Default for Wallet {
     fn default() -> Self {
         const WALLET: &[u8] = include_bytes!("../assets/dusk_wallet_core.wasm");
@@ -469,9 +477,17 @@ impl Default for Wallet {
         let module =
             Module::new(&store, WALLET).expect("failed to create wasm module");
 
-        let import_object = imports! {};
+        let env = FunctionEnv::new(&mut store, Env { memory: None });
+        let import_object = imports! {
+            "env" => {
+                "printf" => Function::new_typed_with_env(&mut store, &env, printf)
+            },
+        };
         let instance = Instance::new(&mut store, &module, &import_object)
             .expect("failed to instanciate the wasm module");
+
+        let memory = instance.exports.get_memory("memory").unwrap().clone();
+        env.as_mut(&mut store).memory = Some(memory);
 
         Self {
             store,
@@ -479,4 +495,19 @@ impl Default for Wallet {
             instance,
         }
     }
+}
+
+fn printf(mut env: FunctionEnvMut<Env>, ptr: i32, len: i32) {
+    let store = env.as_store_ref();
+    let (env_data) = env.data();
+
+    let memory_view = env_data.memory.as_ref().unwrap().view(&store);
+
+    let mut bytes = vec![0u8; len as usize];
+
+    memory_view.read(ptr as u64, &mut bytes).unwrap();
+
+    let s = String::from_utf8(bytes).unwrap();
+
+    print!("{}", s);
 }
