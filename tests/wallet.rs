@@ -19,7 +19,7 @@ use phoenix_core::Crossover;
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use wasmer::{imports, Instance, Module, Store, Value};
+use wasmtime::{Engine, Instance, Module, Store, Val};
 
 #[test]
 fn seed_works() {
@@ -356,7 +356,7 @@ mod node {
 }
 
 pub struct Wallet {
-    pub store: Store,
+    pub store: Store<()>,
     pub module: Module,
     pub instance: Instance,
 }
@@ -386,21 +386,19 @@ impl<'a> CallResult<'a> {
 
         self.wallet
             .instance
-            .exports
-            .get_memory("memory")
-            .unwrap()
-            .view(&self.wallet.store)
-            .read(self.val as u64, &mut bytes)
+            .get_memory(&mut self.wallet.store, "memory")
+            .expect("There should be one memory")
+            .read(&mut self.wallet.store, self.val as usize, &mut bytes)
             .unwrap();
 
         self.wallet
             .instance
-            .exports
-            .get_function("free_mem")
-            .unwrap()
+            .get_func(&mut self.wallet.store, "free_mem")
+            .expect("free_mem should exist")
             .call(
                 &mut self.wallet.store,
-                &[Value::I32(self.val as i32), Value::I32(self.aux as i32)],
+                &[Val::I32(self.val as i32), Val::I32(self.aux as i32)],
+                &mut [],
             )
             .unwrap();
 
@@ -429,35 +427,39 @@ impl Wallet {
         T: Serialize,
     {
         let bytes = serde_json::to_string(&args).unwrap();
-        let len = Value::I32(bytes.len() as i32);
-        let ptr = self
-            .instance
-            .exports
-            .get_function("allocate")
-            .unwrap()
-            .call(&mut self.store, &[len.clone()])
-            .unwrap()[0]
-            .unwrap_i32();
 
-        self.instance
-            .exports
-            .get_memory("memory")
-            .unwrap()
-            .view(&self.store)
-            .write(ptr as u64, bytes.as_bytes())
+        let len_params = [Val::I32(bytes.len() as i32)];
+        let mut ptr_results = [Val::I32(0)];
+
+        let allocate = self
+            .instance
+            .get_func(&mut self.store, "allocate")
+            .expect("allocate should exist");
+
+        allocate
+            .call(&mut self.store, &len_params, &mut ptr_results)
             .unwrap();
 
-        let ptr = Value::I32(ptr);
-        let result = self
-            .instance
-            .exports
-            .get_function(f)
-            .unwrap()
-            .call(&mut self.store, &[ptr, len])
-            .unwrap()[0]
-            .unwrap_i64();
+        self.instance
+            .get_memory(&mut self.store, "memory")
+            .expect("There should be one memory")
+            .write(
+                &mut self.store,
+                ptr_results[0].unwrap_i32() as usize,
+                bytes.as_bytes(),
+            )
+            .expect("Writing to memory should succeed");
 
-        CallResult::new(self, result)
+        let params = [ptr_results[0].clone(), len_params[0].clone()];
+        let mut results = [Val::I64(0)];
+
+        self.instance
+            .get_func(&mut self.store, f)
+            .expect("allocate should exist")
+            .call(&mut self.store, &params, &mut results)
+            .unwrap();
+
+        CallResult::new(self, results[0].unwrap_i64())
     }
 }
 
@@ -465,13 +467,14 @@ impl Default for Wallet {
     fn default() -> Self {
         const WALLET: &[u8] = include_bytes!("../assets/dusk_wallet_core.wasm");
 
-        let mut store = Store::default();
-        let module =
-            Module::new(&store, WALLET).expect("failed to create wasm module");
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
 
-        let import_object = imports! {};
-        let instance = Instance::new(&mut store, &module, &import_object)
-            .expect("failed to instanciate the wasm module");
+        let module =
+            Module::new(&engine, WALLET).expect("failed to create wasm module");
+
+        let instance = Instance::new(&mut store, &module, &[])
+            .expect("failed to instantiate the wasm module");
 
         Self {
             store,
