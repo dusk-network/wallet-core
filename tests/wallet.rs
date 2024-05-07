@@ -19,7 +19,7 @@ use phoenix_core::Crossover;
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use wasmtime::{Engine, Instance, Module, Store, Val};
+use wasmtime::{Caller, Engine, Instance, Linker, Module, Store, Val};
 
 #[test]
 fn seed_works() {
@@ -468,13 +468,40 @@ impl Default for Wallet {
         const WALLET: &[u8] = include_bytes!("../assets/dusk_wallet_core.wasm");
 
         let engine = Engine::default();
+
+        let mut linker = Linker::new(&engine);
+
+        linker
+            .func_wrap(
+                "env",
+                "print",
+                |mut caller: Caller<'_, _>, ptr: u32, len: u32| {
+                    let mut text_buffer = vec![0u8; len as usize];
+
+                    caller
+                        .get_export("memory")
+                        .expect("Memory should exist")
+                        .into_memory()
+                        .expect("Memory should be a memory")
+                        .read(caller, ptr as usize, &mut text_buffer[..])
+                        .expect("Reading from memory should succeed");
+
+                    let text = String::from_utf8(text_buffer)
+                        .expect("String should be valid");
+
+                    println!("{text}");
+                },
+            )
+            .expect("Wrapping import should succeed");
+
         let mut store = Store::new(&engine, ());
 
         let module =
             Module::new(&engine, WALLET).expect("failed to create wasm module");
 
-        let instance = Instance::new(&mut store, &module, &[])
-            .expect("failed to instantiate the wasm module");
+        let instance = linker
+            .instantiate(&mut store, &module)
+            .expect("Instantiating module should succeed");
 
         Self {
             store,
