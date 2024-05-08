@@ -6,7 +6,10 @@
 
 //! FFI bindings exposed to WASM module.
 
-use alloc::{vec, vec::Vec};
+use alloc::{
+    alloc::{alloc, dealloc, Layout},
+    vec::Vec,
+};
 use core::mem;
 
 use dusk_bytes::Serializable;
@@ -15,22 +18,28 @@ use sha2::{Digest, Sha512};
 
 use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
 
+/// The alignment of the memory allocated by the FFI.
+///
+/// This is 1 because we're not allocating any complex data structures, and
+/// just interacting with the memory directly.
+const ALIGNMENT: usize = 1;
+
 /// Allocates a buffer of `len` bytes on the WASM memory.
 #[no_mangle]
 pub fn allocate(len: i32) -> i32 {
-    let bytes = vec![0u8; len as usize];
-    let ptr = bytes.as_ptr();
-    mem::forget(bytes);
-    ptr as i32
+    unsafe {
+        let layout = Layout::from_size_align_unchecked(len as usize, ALIGNMENT);
+        let ptr = alloc(layout);
+        ptr as _
+    }
 }
 
 /// Frees a previously allocated buffer on the WASM memory.
 #[no_mangle]
 pub fn free_mem(ptr: i32, len: i32) {
-    let ptr = ptr as *mut u8;
-    let len = len as usize;
     unsafe {
-        Vec::from_raw_parts(ptr, len, len);
+        let layout = Layout::from_size_align_unchecked(len as usize, ALIGNMENT);
+        dealloc(ptr as _, layout);
     }
 }
 
@@ -53,11 +62,9 @@ pub fn seed(args: i32, len: i32) -> i64 {
     hash.update(b"SEED");
 
     let seed = hash.finalize().to_vec();
-    let ptr = seed.as_ptr() as u32;
-    let len = seed.len() as u32;
 
-    mem::forget(seed);
-    utils::compose(true, ptr, len)
+    let (ptr, len) = utils::allocated_copy(seed);
+    utils::compose(true, ptr as _, len as _)
 }
 
 /// Computes the total balance of the given notes.
