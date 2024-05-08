@@ -53,11 +53,9 @@ pub fn seed(args: i32, len: i32) -> i64 {
     hash.update(b"SEED");
 
     let seed = hash.finalize().to_vec();
-    let ptr = seed.as_ptr() as u32;
-    let len = seed.len() as u32;
 
-    mem::forget(seed);
-    utils::compose(true, ptr, len)
+    let (ptr, len) = utils::allocated_copy(seed);
+    utils::compose(true, ptr as _, len as _)
 }
 
 /// Computes the total balance of the given notes.

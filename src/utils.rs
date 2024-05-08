@@ -6,10 +6,10 @@
 
 //! Misc utilities required by the library implementation.
 
-use crate::{tx, MAX_INPUT_NOTES, MAX_LEN, RNG_SEED};
+use crate::{ffi, tx, MAX_INPUT_NOTES, MAX_LEN, RNG_SEED};
 
 use alloc::vec::Vec;
-use core::mem;
+use core::ptr;
 
 use dusk_bytes::DeserializableSlice;
 use dusk_jubjub::JubJubScalar;
@@ -93,14 +93,9 @@ pub fn into_ptr<T>(response: T) -> i64
 where
     T: Serialize,
 {
-    let response = serde_json::to_string(&response).unwrap_or_default();
-    let ptr = response.as_ptr() as u32;
-    let len = response.len() as u32;
-    let result = compose(true, ptr, len);
-
-    mem::forget(response);
-
-    result
+    let response = serde_json::to_string(&response).unwrap_or_default().leak();
+    let (ptr, len) = allocated_copy(response);
+    compose(true, ptr as _, len as _)
 }
 
 /// Returns the provided bytes as a pointer
@@ -113,11 +108,23 @@ where
         Err(_) => return fail(),
     };
 
-    let ptr = bytes.as_ptr() as u32;
-    let len = bytes.len() as u32;
+    let (ptr, len) = allocated_copy(bytes);
 
-    mem::forget(bytes);
     compose(true, ptr, len)
+}
+
+/// Allocated a new buffer, copies the provided bytes to it, and returns the
+/// pointer and length of the new buffer.
+pub fn allocated_copy<B: AsRef<[u8]>>(bytes: B) -> (u32, u32) {
+    unsafe {
+        let bytes = bytes.as_ref();
+        let len = bytes.len();
+
+        let ptr = ffi::allocate(bytes.len() as _);
+        ptr::copy_nonoverlapping(bytes.as_ptr(), ptr as _, len);
+
+        (ptr as _, len as _)
+    }
 }
 
 /// Creates a secure RNG directly a seed.
