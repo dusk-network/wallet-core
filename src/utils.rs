@@ -13,8 +13,7 @@ use core::ptr;
 
 use dusk_bytes::DeserializableSlice;
 use dusk_jubjub::JubJubScalar;
-use dusk_pki::PublicSpendKey;
-use phoenix_core::Note;
+use phoenix_core::{Note, PublicKey};
 use rand_chacha::ChaCha12Rng;
 use rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
@@ -155,11 +154,11 @@ pub fn sanitize_notes(mut notes: Vec<Note>) -> Vec<Note> {
     notes
 }
 
-/// Converts a Base58 string into a [PublicSpendKey].
-pub fn bs58_to_psk(psk: &str) -> Option<PublicSpendKey> {
-    // TODO this should be defined in dusk-pki
-    let bytes = bs58::decode(psk).into_vec().ok()?;
-    PublicSpendKey::from_reader(&mut &bytes[..]).ok()
+/// Converts a Base58 string into a [`PublicKey`].
+pub fn bs58_to_pk(pk: &str) -> Option<PublicKey> {
+    // TODO this should be defined in phoenix-core
+    let bytes = bs58::decode(pk).into_vec().ok()?;
+    PublicKey::from_reader(&mut &bytes[..]).ok()
 }
 
 /// Calculate the inputs for a transaction.
@@ -271,7 +270,8 @@ fn compose_works() {
 fn knapsack_works() {
     use core::mem;
     use dusk_jubjub::JubJubScalar;
-    use dusk_pki::SecretSpendKey;
+    use ff::Field;
+    use phoenix_core::{PublicKey, SecretKey};
     use rand::{rngs::StdRng, SeedableRng};
 
     // openings are not checked here; no point in setting them up properly
@@ -282,31 +282,39 @@ fn knapsack_works() {
     assert_eq!(inputs(vec![], 70), None);
 
     // basic check
-    let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
-    let note = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
+    let sk = SecretKey::random(rng);
+    let pk = PublicKey::from(&sk);
+    let blinder = JubJubScalar::random(&mut *rng);
+    let note = Note::obfuscated(rng, &pk, 100, blinder);
     let available = vec![(note, o, 100, blinder)];
     let inputs_notes = available.clone();
     assert_eq!(inputs(available, 70), Some(inputs_notes));
 
     // out of balance basic check
-    let key = SecretSpendKey::random(rng);
-    let blinder = JubJubScalar::random(rng);
-    let note = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
+    let sk = SecretKey::random(rng);
+    let pk = PublicKey::from(&sk);
+    let blinder = JubJubScalar::random(&mut *rng);
+    let note = Note::obfuscated(rng, &pk, 100, blinder);
     let available = vec![(note, o, 100, blinder)];
     assert_eq!(inputs(available, 101), None);
 
     // multiple inputs check
     // note: this test is checking a naive, simple order-based output
-    let key = SecretSpendKey::random(rng);
-    let blinder1 = JubJubScalar::random(rng);
-    let note1 = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
-    let key = SecretSpendKey::random(rng);
-    let blinder2 = JubJubScalar::random(rng);
-    let note2 = Note::obfuscated(rng, &key.public_spend_key(), 500, blinder);
-    let key = SecretSpendKey::random(rng);
-    let blinder3 = JubJubScalar::random(rng);
-    let note3 = Note::obfuscated(rng, &key.public_spend_key(), 300, blinder);
+    let sk = SecretKey::random(rng);
+    let pk = PublicKey::from(&sk);
+    let blinder1 = JubJubScalar::random(&mut *rng);
+    // shouldn't this note be created with blinder1?
+    let note1 = Note::obfuscated(rng, &pk, 100, blinder);
+    let sk = SecretKey::random(rng);
+    let pk = PublicKey::from(&sk);
+    let blinder2 = JubJubScalar::random(&mut *rng);
+    // shouldn't this note be created with blinder2?
+    let note2 = Note::obfuscated(rng, &pk, 500, blinder);
+    let sk = SecretKey::random(rng);
+    let pk = PublicKey::from(&sk);
+    let blinder3 = JubJubScalar::random(&mut *rng);
+    // shouldn't this note be created with blinder3?
+    let note3 = Note::obfuscated(rng, &pk, 300, blinder);
     let available = vec![
         (note1, o, 100, blinder1),
         (note2, o, 500, blinder2),
@@ -316,15 +324,21 @@ fn knapsack_works() {
     assert_eq!(inputs(available.clone(), 600), Some(available));
 
     // multiple inputs, out of balance check
-    let key = SecretSpendKey::random(rng);
-    let blinder1 = JubJubScalar::random(rng);
-    let note1 = Note::obfuscated(rng, &key.public_spend_key(), 100, blinder);
-    let key = SecretSpendKey::random(rng);
-    let blinder2 = JubJubScalar::random(rng);
-    let note2 = Note::obfuscated(rng, &key.public_spend_key(), 500, blinder);
-    let key = SecretSpendKey::random(rng);
-    let blinder3 = JubJubScalar::random(rng);
-    let note3 = Note::obfuscated(rng, &key.public_spend_key(), 300, blinder);
+    let sk = SecretKey::random(rng);
+    let pk = PublicKey::from(&sk);
+    let blinder1 = JubJubScalar::random(&mut *rng);
+    // shouldn't this note be created with blinder1?
+    let note1 = Note::obfuscated(rng, &pk, 100, blinder);
+    let sk = SecretKey::random(rng);
+    let pk = PublicKey::from(&sk);
+    let blinder2 = JubJubScalar::random(&mut *rng);
+    // shouldn't this note be created with blinder2?
+    let note2 = Note::obfuscated(rng, &pk, 500, blinder);
+    let sk = SecretKey::random(rng);
+    let pk = PublicKey::from(&sk);
+    let blinder3 = JubJubScalar::random(&mut *rng);
+    // shouldn't this note be created with blinder3?
+    let note3 = Note::obfuscated(rng, &pk, 300, blinder);
     let available = vec![
         (note1, o, 100, blinder1),
         (note2, o, 500, blinder2),

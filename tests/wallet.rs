@@ -8,14 +8,12 @@
 
 use dusk_bytes::Serializable;
 use dusk_jubjub::JubJubScalar;
-use dusk_pki::PublicSpendKey;
 use dusk_wallet_core::{
     tx,
     types::{self, CrossoverType as WasmCrossover},
     utils, MAX_KEY, MAX_LEN, RNG_SEED,
 };
-use phoenix_core::Crossover;
-
+use phoenix_core::{Crossover, PublicKey, ViewKey};
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -60,15 +58,15 @@ fn execute_works() {
 
     let mut wallet = Wallet::default();
 
-    let types::PublicSpendKeysResponse { keys } = wallet
+    let types::PublicKeysResponse { keys } = wallet
         .call(
-            "public_spend_keys",
+            "public_keys",
             json!({
                 "seed": seed.to_vec(),
             }),
         )
         .take_contents();
-    let psk = &keys[0];
+    let pk = &keys[0];
 
     let mut contract: ContractId = ContractId::uninitialized();
     contract.as_bytes_mut().iter_mut().for_each(|b| *b = 0xfa);
@@ -106,7 +104,7 @@ fn execute_works() {
             "ref_id": 15,
             "value": 10,
         },
-        "refund": psk,
+        "refund": pk,
         "rng_seed": rng_seed.to_vec(),
         "seed": seed.to_vec()
     });
@@ -181,14 +179,14 @@ fn filter_notes_works() {
 }
 
 #[test]
-fn public_spend_keys_works() {
+fn public_keys_works() {
     let seed = [0xfa; RNG_SEED];
 
     let mut wallet = Wallet::default();
 
-    let types::PublicSpendKeysResponse { keys } = wallet
+    let types::PublicKeysResponse { keys } = wallet
         .call(
-            "public_spend_keys",
+            "public_keys",
             json!({
                 "seed": seed.to_vec(),
             }),
@@ -197,9 +195,9 @@ fn public_spend_keys_works() {
 
     for key in &keys {
         let key = bs58::decode(key).into_vec().unwrap();
-        let mut key_array = [0u8; PublicSpendKey::SIZE];
+        let mut key_array = [0u8; PublicKey::SIZE];
         key_array.copy_from_slice(&key);
-        PublicSpendKey::from_bytes(&key_array).unwrap();
+        PublicKey::from_bytes(&key_array).unwrap();
     }
 
     assert_eq!(keys.len(), MAX_KEY + 1);
@@ -220,7 +218,7 @@ fn view_keys_works() {
         )
         .take_memory();
 
-    rkyv::from_bytes::<Vec<dusk_pki::ViewKey>>(&vk).unwrap();
+    rkyv::from_bytes::<Vec<ViewKey>>(&vk).unwrap();
 }
 
 #[test]
@@ -258,7 +256,8 @@ mod node {
 
     use dusk_jubjub::{BlsScalar, JubJubScalar};
     use dusk_wallet_core::{key, tx, MAX_KEY, MAX_LEN, RNG_SEED};
-    use phoenix_core::Note;
+    use ff::Field;
+    use phoenix_core::{Note, PublicKey};
     use rand::{rngs::StdRng, RngCore};
     use rand_core::SeedableRng;
 
@@ -271,13 +270,13 @@ mod node {
             .into_iter()
             .map(|value| {
                 let obfuscated = (rng.next_u32() & 1) == 1;
-                let psk = key::derive_ssk(seed, 0).public_spend_key();
+                let pk = key::derive_pk(seed, 0);
 
                 if obfuscated {
-                    let blinder = JubJubScalar::random(rng);
-                    Note::obfuscated(rng, &psk, value, blinder)
+                    let blinder = JubJubScalar::random(&mut *rng);
+                    Note::obfuscated(rng, &pk, value, blinder)
                 } else {
-                    Note::transparent(rng, &psk, value)
+                    Note::transparent(rng, &pk, value)
                 }
             })
             .collect()
@@ -338,17 +337,17 @@ mod node {
             .map(|value| {
                 let obfuscated = (rng.next_u32() & 1) == 1;
                 let idx = rng.next_u64() % MAX_KEY as u64;
-                let ssk = key::derive_ssk(seed, idx);
-                let psk = ssk.public_spend_key();
+                let sk = key::derive_sk(seed, idx);
+                let pk = PublicKey::from(&sk);
 
                 let note = if obfuscated {
-                    let blinder = JubJubScalar::random(rng);
-                    Note::obfuscated(rng, &psk, value, blinder)
+                    let blinder = JubJubScalar::random(&mut *rng);
+                    Note::obfuscated(rng, &pk, value, blinder)
                 } else {
-                    Note::transparent(rng, &psk, value)
+                    Note::transparent(rng, &pk, value)
                 };
 
-                let nullifier = note.gen_nullifier(&ssk);
+                let nullifier = note.gen_nullifier(&sk);
                 (note, nullifier)
             })
             .collect()

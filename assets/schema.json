@@ -331,8 +331,8 @@
         }
       }
     },
-    "PublicSpendKeysArgs": {
-      "description": "The arguments of the public_spend_keys function",
+    "PublicKeysArgs": {
+      "description": "The arguments of the public_keys function",
       "type": "object",
       "required": [
         "seed"
@@ -351,15 +351,15 @@
         }
       }
     },
-    "PublicSpendKeysResponse": {
-      "description": "The response of the public_spend_keys function",
+    "PublicKeysResponse": {
+      "description": "The response of the public_keys function",
       "type": "object",
       "required": [
         "keys"
       ],
       "properties": {
         "keys": {
-          "description": "The Base58 public spend keys of the wallet.",
+          "description": "The Base58 public keys of the wallet.",
           "type": "array",
           "items": {
             "type": "string"
@@ -449,7 +449,7 @@
       }
     },
     "RkyvTreeLeafResponse": {
-      "description": "The response of the public_spend_keys function",
+      "description": "The response of the public_keys function",
       "type": "object",
       "required": [
         "block_height",
@@ -557,13 +557,13 @@
         }
       }
     },
-    "PublicSpendKeysAndNotesType": {
+    "PublicKeysAndNotesType": {
       "description": "Type of the response of the check_note_validity function",
       "type": "object",
-      "required": ["public_spend_key", "notes"],
+      "required": ["public_key", "notes"],
       "properties": {
-        "public_spend_key": {
-          "description": "The public spend key as a bs58 formated string",
+        "public_key": {
+          "description": "The public key as a bs58 formated string",
           "type": "string"
         },
         "notes": {
@@ -616,8 +616,8 @@
             "format": "uint8"
           }
         },
-        "public_spend_key": {
-          "description": "A base 58 encoded public spend key string",
+        "public_key": {
+          "description": "A base 58 encoded public key string",
           "type": "string"
         }
       }
@@ -745,7 +745,7 @@
     "UnspentSpentNotesArgs": {
       "description": "Arguents of the unspent_spent_notes function",
       "type": "object",
-      "required": ["notes", "nullifiers_of_notes", "block_heights", "existing_nullifiers", "psks"],
+      "required": ["notes", "nullifiers_of_notes", "block_heights", "existing_nullifiers", "pks"],
       "properties": {
         "notes": {
           "description": "The Array<UInt8Array> of rkyv serialized notes",
@@ -785,7 +785,7 @@
             "format": "uint8"
           }
         },
-        "psks": {
+        "pks": {
           "description": "Array of bs58 encoded string to be sent with the response of the function",
           "type": "array",
           "items": {
@@ -818,14 +818,14 @@
     "NoteInfoType": {
       "description": "Information about the note",
       "type": "object",
-      "required": ["pos", "psk", "note", "nullifier", "block_height"],
+      "required": ["pos", "pk", "note", "nullifier", "block_height"],
       "properties": {
         "pos": {
           "description": "position of the note",
           "type": "integer"
         },
-        "psk": {
-          "description": "public spend key belonging to that note",
+        "pk": {
+          "description": "public key belonging to that note",
           "type": "string"
         },
         "note": {
@@ -944,7 +944,7 @@
     "GetStakeCallDataArgs": {
       "description": "Get the call data for stakeing",
       "type": "object",
-      "required": ["staker_index", "seed", "spend_proof", "value", "counter"],
+      "required": ["staker_index", "seed", "proof", "value", "counter"],
       "properties": {
         "staker_index": {
           "description": "Index of the address of the staker in the seed",
@@ -959,7 +959,7 @@
             "format": "uint8"
           }
         },
-        "spend_proof": {
+        "proof": {
           "description": "The stct proof as recieved from the node",
           "type": "array",
           "items": {
@@ -1076,8 +1076,8 @@
         }
       }
     },
-    "GetPublicKeyRkyvSerializedArgs": {
-      "description": "Args of the get_public_key_rkyv_serialized function",
+    "GetStakePKrkyvSerializedArgs": {
+      "description": "Args of the get_stake_pk_rkyv_serialized function",
       "type": "object",
       "required": ["seed", "index"],
       "properties": {
@@ -1211,7 +1211,7 @@
           "format": "uint64"
         },
         "refund": {
-          "description": "psk in string of who to refund this tx to",
+          "description": "pk in string of who to refund this tx to",
           "type": "string"
         },
         "owner_index": {

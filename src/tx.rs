@@ -13,11 +13,11 @@ use core::mem;
 use bytecheck::CheckBytes;
 use dusk_bls12_381::BlsScalar;
 use dusk_jubjub::{JubJubExtended, JubJubScalar, GENERATOR_NUMS_EXTENDED};
-use dusk_pki::{Ownable, PublicSpendKey, SecretSpendKey};
-use dusk_schnorr::Proof as SchnorrSig;
 use ff::Field;
+use jubjub_schnorr::SignatureDouble;
 use phoenix_core::{
-    Crossover as PhoenixCrossover, Fee, Note, NoteType, Transaction,
+    Crossover as PhoenixCrossover, Fee, Note, NoteType, Ownable, PublicKey,
+    SecretKey, Transaction, ViewKey,
 };
 use rand_core::{CryptoRng, RngCore};
 use rkyv::{Archive, Deserialize, Serialize};
@@ -42,7 +42,7 @@ pub struct PreInput<'a> {
     /// Decrypted value of the input note.
     pub value: u64,
     /// Secret key to generate the nullifier of the input note.
-    pub ssk: &'a SecretSpendKey,
+    pub sk: &'a SecretKey,
 }
 
 /// An input to a transaction that is yet to be proven.
@@ -60,9 +60,9 @@ pub struct Input {
     /// Blinding factor used to construct the note.
     pub blinder: JubJubScalar,
     /// Stealth address derived from the key of the owner of the note.
-    pub pk_r_prime: JubJubExtended,
+    pub note_pk_prime: JubJubExtended,
     /// Schnorr signature to prove the ownership of the note.
-    pub sig: SchnorrSig,
+    pub sig: SignatureDouble,
 }
 
 /// A preliminary output to a transaction that is yet to be proven.
@@ -74,7 +74,7 @@ pub struct OutputValue {
     /// Value of the output.
     pub value: u64,
     /// Public key that will receive the note as spendable input.
-    pub receiver: PublicSpendKey,
+    pub receiver: PublicKey,
     /// Nonce/reference to be attached to the note.
     pub ref_id: u64,
 }
@@ -155,7 +155,7 @@ impl UnprovenTransaction {
         let (nullifiers, inputs): (Vec<_>, Vec<_>) = inputs
             .into_iter()
             .map(|i| {
-                let nullifier = i.note.gen_nullifier(i.ssk);
+                let nullifier = i.note.gen_nullifier(i.sk);
                 (nullifier, i)
             })
             .unzip();
@@ -177,10 +177,10 @@ impl UnprovenTransaction {
                 types::OutputType::Obfuscated => NoteType::Obfuscated,
             };
 
-            let r = JubJubScalar::random(rng);
-            let blinder = JubJubScalar::random(rng);
+            let r = JubJubScalar::random(&mut *rng);
+            let blinder = JubJubScalar::random(&mut *rng);
             let nonce = BlsScalar::random(&mut *rng);
-            let receiver = utils::bs58_to_psk(&receiver)?;
+            let receiver = utils::bs58_to_pk(&receiver)?;
             let note = Note::deterministic(
                 r#type, &r, nonce, &receiver, value, blinder,
             );
@@ -258,17 +258,18 @@ impl UnprovenTransaction {
                         note,
                         opening,
                         value,
-                        ssk,
+                        sk,
                     },
                     nullifier,
                 )| {
-                    let vk = ssk.view_key();
-                    let sk_r = ssk.sk_r(note.stealth_address());
+                    let vk = ViewKey::from(sk);
+                    let note_sk = sk.sk_r(note.stealth_address());
                     let blinder =
                         note.blinding_factor(Some(&vk)).map_err(|_| ())?;
 
-                    let pk_r_prime = GENERATOR_NUMS_EXTENDED * sk_r.as_ref();
-                    let sig = SchnorrSig::new(&sk_r, rng, tx_hash);
+                    let note_pk_prime =
+                        GENERATOR_NUMS_EXTENDED * note_sk.as_ref();
+                    let sig = note_sk.sign_double(rng, tx_hash);
 
                     Ok(Input {
                         nullifier,
@@ -276,7 +277,7 @@ impl UnprovenTransaction {
                         note,
                         value,
                         blinder,
-                        pk_r_prime,
+                        note_pk_prime,
                         sig,
                     })
                 },

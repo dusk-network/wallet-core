@@ -6,7 +6,7 @@
 
 use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
-use phoenix_core::Note;
+use phoenix_core::{Note, PublicKey, ViewKey};
 
 use alloc::vec::Vec;
 
@@ -41,26 +41,25 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
 
     let mut is_owned: bool = false;
     let mut nullifier_found = BlsScalar::default();
-    let mut psk_found: Option<dusk_pki::PublicSpendKey> = None;
+    let mut pk_found: Option<PublicKey> = None;
 
     for idx in 0..=MAX_KEY {
         let idx = idx as u64;
-        let view_key = key::derive_vk(&seed, idx);
+        let sk = key::derive_sk(&seed, idx);
+        let vk = ViewKey::from(&sk);
 
-        if view_key.owns(&note) {
-            let ssk = key::derive_ssk(&seed, idx);
-            let nullifier = note.gen_nullifier(&ssk);
+        if vk.owns(&note) {
+            let nullifier = note.gen_nullifier(&sk);
 
             nullifier_found = nullifier;
             is_owned = true;
-            psk_found = Some(ssk.public_spend_key());
+            pk_found = Some(PublicKey::from(&sk));
 
             break;
         }
     }
 
-    let psk_found =
-        psk_found.map(|psk| bs58::encode(psk.to_bytes()).into_string());
+    let pk_found = pk_found.map(|pk| bs58::encode(pk.to_bytes()).into_string());
 
     let nullifier_found =
         match rkyv::to_bytes::<BlsScalar, MAX_LEN>(&nullifier_found).ok() {
@@ -71,7 +70,7 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
     utils::into_ptr(types::CheckNoteOwnershipResponse {
         is_owned,
         nullifier: nullifier_found,
-        public_spend_key: psk_found,
+        public_key: pk_found,
     })
 }
 
@@ -84,7 +83,7 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
         nullifiers_of_notes,
         block_heights,
         existing_nullifiers,
-        psks,
+        pks,
     } = match utils::take_args(args, len) {
         Some(a) => a,
         None => return utils::fail(),
@@ -99,10 +98,10 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
     let mut spent_notes = Vec::new();
     let mut unspent_notes = Vec::new();
 
-    for (index, ((note, nullifier), psk)) in notes
+    for (index, ((note, nullifier), pk)) in notes
         .into_iter()
         .zip(nullifiers_of_notes)
-        .zip(psks)
+        .zip(pks)
         .enumerate()
     {
         let parsed_note: Note = match rkyv::from_bytes::<Note>(&note).ok() {
@@ -124,7 +123,7 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
         if existing_nullifiers.contains(&parsed_nullifier) {
             spent_notes.push(types::NoteInfoType {
                 pos: *parsed_note.pos(),
-                psk,
+                pk,
                 block_height,
                 note,
                 nullifier,
@@ -134,7 +133,7 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
                 pos: *parsed_note.pos(),
                 note,
                 block_height,
-                psk,
+                pk,
                 nullifier,
             });
         }

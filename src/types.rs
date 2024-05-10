@@ -46,9 +46,9 @@ pub struct CheckNoteOwnershipResponse {
     pub is_owned: bool,
     #[doc = " Nullifier of the note that we were checking the ownership of"]
     pub nullifier: Vec<u8>,
-    #[doc = " A base 58 encoded public spend key string"]
+    #[doc = " A base 58 encoded public key string"]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_spend_key: Option<String>,
+    pub public_key: Option<String>,
 }
 #[doc = " The value of the Crossover and the blinder"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -164,7 +164,7 @@ pub struct GetAllowCallDataArgs {
     pub gas_price: u64,
     #[doc = " index of the owner of the stake"]
     pub owner_index: u64,
-    #[doc = " psk in string of who to refund this tx to"]
+    #[doc = " pk in string of who to refund this tx to"]
     pub refund: String,
     #[doc = " random rng seed"]
     pub rng_seed: Vec<u8>,
@@ -221,23 +221,15 @@ pub struct GetMnemonicSeedResponse {
     #[doc = " Seed bytes from the given passphrase and Mnemonic"]
     pub mnemonic_seed: Vec<u8>,
 }
-#[doc = " Args of the get_public_key_rkyv_serialized function"]
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct GetPublicKeyRkyvSerializedArgs {
-    #[doc = " The index of the public key to get"]
-    pub index: u64,
-    #[doc = " The seed to generate the sender keys from"]
-    pub seed: Vec<u8>,
-}
 #[doc = " Get the call data for stakeing"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct GetStakeCallDataArgs {
     #[doc = " The stake counter value"]
     pub counter: u64,
+    #[doc = " The stct proof as recieved from the node"]
+    pub proof: Vec<u8>,
     #[doc = " The seed to generate the sender keys from"]
     pub seed: Vec<u8>,
-    #[doc = " The stct proof as recieved from the node"]
-    pub spend_proof: Vec<u8>,
     #[doc = " Index of the address of the staker in the seed"]
     pub staker_index: u64,
     #[doc = " The amount of value to stake"]
@@ -278,6 +270,14 @@ pub struct GetStakeInfoRespose {
     #[doc = " Reward for participating in concensus"]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reward: Option<u64>,
+}
+#[doc = " Args of the get_stake_pk_rkyv_serialized function"]
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub struct GetStakePKrkyvSerializedArgs {
+    #[doc = " The index of the public key to get"]
+    pub index: u64,
+    #[doc = " The seed to generate the sender keys from"]
+    pub seed: Vec<u8>,
 }
 #[doc = " Get the bytes for the stct proof to send to the node"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -366,10 +366,10 @@ pub struct NoteInfoType {
     pub note: Vec<u8>,
     #[doc = " Nullifier of a Singular Note rkyv serialized"]
     pub nullifier: Vec<u8>,
+    #[doc = " public key belonging to that note"]
+    pub pk: String,
     #[doc = " position of the note"]
     pub pos: u64,
-    #[doc = " public spend key belonging to that note"]
-    pub psk: String,
 }
 #[doc = " The arguments of the nullifiers function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -411,22 +411,22 @@ pub struct ProveTxResponse {
 }
 #[doc = " Type of the response of the check_note_validity function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct PublicSpendKeysAndNotesType {
+pub struct PublicKeysAndNotesType {
     #[doc = " Array of notes which are rkyv serialized"]
     pub notes: Vec<u8>,
-    #[doc = " The public spend key as a bs58 formated string"]
-    pub public_spend_key: String,
+    #[doc = " The public key as a bs58 formated string"]
+    pub public_key: String,
 }
-#[doc = " The arguments of the public_spend_keys function"]
+#[doc = " The arguments of the public_keys function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct PublicSpendKeysArgs {
+pub struct PublicKeysArgs {
     #[doc = " Seed used to derive the keys of the wallet"]
     pub seed: Vec<u8>,
 }
-#[doc = " The response of the public_spend_keys function"]
+#[doc = " The response of the public_keys function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct PublicSpendKeysResponse {
-    #[doc = " The Base58 public spend keys of the wallet."]
+pub struct PublicKeysResponse {
+    #[doc = " The Base58 public keys of the wallet."]
     pub keys: Vec<String>,
 }
 #[doc = " Arguments of the rkyv_bls_scalar_array function"]
@@ -453,7 +453,7 @@ pub struct RkyvTreeLeaf {
     #[doc = " Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf"]
     pub bytes: Vec<u8>,
 }
-#[doc = " The response of the public_spend_keys function"]
+#[doc = " The response of the public_keys function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct RkyvTreeLeafResponse {
     #[doc = " The block height of the note."]
@@ -540,7 +540,7 @@ pub struct UnspentSpentNotesArgs {
     #[doc = " notes"]
     pub nullifiers_of_notes: Vec<Vec<u8>>,
     #[doc = " Array of bs58 encoded string to be sent with the response of the function"]
-    pub psks: Vec<String>,
+    pub pks: Vec<String>,
 }
 #[doc = " The arguments of the view_keys function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

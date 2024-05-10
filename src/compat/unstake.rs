@@ -15,14 +15,13 @@ use crate::{
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use dusk_bls12_381_sign::PublicKey;
-use dusk_bytes::Serializable;
-use dusk_bytes::Write;
+use bls12_381_bls::PublicKey as StakePublicKey;
+use dusk_bytes::{Serializable, Write};
 use dusk_jubjub::{JubJubAffine, JubJubScalar};
-use dusk_plonk::proof_system::Proof;
-use phoenix_core::*;
-
-use super::stake_contract_types::*;
+use dusk_plonk::prelude::Proof;
+use ff::Field;
+use phoenix_core::{Crossover, Fee, Note, PublicKey};
+use stake_contract_types::{unstake_signature_message, Unstake};
 
 const WFCT_INPUT_SIZE: usize =
     JubJubAffine::SIZE + u64::SIZE + JubJubScalar::SIZE;
@@ -54,15 +53,15 @@ pub fn get_wfct_proof(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sender = derive_ssk(&seed, sender_index);
-    let refund = match bs58_to_psk(&refund) {
+    let sender = derive_sk(&seed, sender_index);
+    let refund = match bs58_to_pk(&refund) {
         Some(a) => a,
         None => return utils::fail(),
     };
 
     let rng = &mut utils::rng(rng_seed);
 
-    let blinder = JubJubScalar::random(rng);
+    let blinder = JubJubScalar::random(&mut *rng);
     let note = Note::obfuscated(rng, &refund, 0, blinder);
     let (mut fee, crossover) = note
         .try_into()
@@ -71,9 +70,8 @@ pub fn get_wfct_proof(args: i32, len: i32) -> i64 {
     fee.gas_limit = gas_limit;
     fee.gas_price = gas_price;
 
-    let unstake_note =
-        Note::transparent(rng, &sender.public_spend_key(), value);
-    let unstake_blinder: dusk_jubjub::Fr = unstake_note
+    let unstake_note = Note::transparent(rng, &PublicKey::from(&sender), value);
+    let unstake_blinder: JubJubScalar = unstake_note
         .blinding_factor(None)
         .expect("Note is transparent so blinding factor is unencrypted");
 
@@ -164,16 +162,16 @@ pub fn get_unstake_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sk = derive_sk(&seed, sender_index);
-    let public_key = PublicKey::from(&sk);
+    let stake_sk = derive_stake_sk(&seed, sender_index);
+    let stake_pk = StakePublicKey::from(&stake_sk);
 
     let unstake_note = unstake_note.to_bytes();
     let signature_message = unstake_signature_message(counter, unstake_note);
 
-    let signature = sk.sign(&public_key, &signature_message);
+    let signature = stake_sk.sign(&stake_pk, &signature_message);
 
     let unstake = Unstake {
-        public_key,
+        public_key: stake_pk,
         signature,
         note: unstake_note.to_vec(),
         proof,

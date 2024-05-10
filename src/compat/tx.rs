@@ -21,9 +21,9 @@ use dusk_bytes::{
     DeserializableSlice, Error as BytesError, Serializable, Write,
 };
 use dusk_jubjub::{BlsScalar, JubJubAffine, JubJubScalar};
-use dusk_plonk::proof_system::Proof;
-use dusk_schnorr::Proof as SchnorrSig;
+use dusk_plonk::prelude::Proof;
 use hashbrown::{hash_map::Entry, HashMap};
+use jubjub_schnorr::SignatureDouble;
 use phoenix_core::{transaction, Crossover, Fee, Note, Transaction};
 use rusk_abi::{hash::Hasher, ContractId, CONTRACT_ID_BYTES};
 
@@ -429,7 +429,7 @@ fn write_optional_call<W: Write>(
 }
 
 fn input_to_var_bytes(input: &tx::Input) -> Vec<u8> {
-    let affine_pkr = JubJubAffine::from(&input.pk_r_prime);
+    let affine_pkr = JubJubAffine::from(&input.note_pk_prime);
 
     let opening_bytes = rkyv::to_bytes::<_, 256>(&input.opening)
         .expect("Rkyv serialization should always succeed for an opening")
@@ -438,7 +438,7 @@ fn input_to_var_bytes(input: &tx::Input) -> Vec<u8> {
     let size = BlsScalar::SIZE
         + Note::SIZE
         + JubJubAffine::SIZE
-        + SchnorrSig::SIZE
+        + SignatureDouble::SIZE
         + u64::SIZE
         + JubJubScalar::SIZE
         + opening_bytes.len();
