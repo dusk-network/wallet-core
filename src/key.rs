@@ -8,17 +8,17 @@
 
 use crate::{utils, RNG_SEED};
 
-use dusk_bls12_381_sign::SecretKey;
-use dusk_pki::{PublicSpendKey, SecretSpendKey, ViewKey};
+use bls12_381_bls::SecretKey as StakeSecretKey;
+use phoenix_core::{PublicKey, SecretKey, ViewKey};
 
-/// Generates a secret spend key from its seed and index.
+/// Generates a stake secret key from its seed and index.
 ///
 /// First the `seed` and then the little-endian representation of the key's
 /// `index` are passed through SHA-256. A constant is then mixed in and the
 /// resulting hash is then used to seed a `ChaCha12` CSPRNG, which is
 /// subsequently used to generate the key.
-pub fn derive_ssk(seed: &[u8; RNG_SEED], index: u64) -> SecretSpendKey {
-    SecretSpendKey::random(&mut utils::rng_with_index(seed, index, b"SSK"))
+pub fn derive_stake_sk(seed: &[u8; RNG_SEED], index: u64) -> StakeSecretKey {
+    StakeSecretKey::random(&mut utils::rng_with_index(seed, index, b"SK"))
 }
 
 /// Generates a secret key from its seed and index.
@@ -28,21 +28,23 @@ pub fn derive_ssk(seed: &[u8; RNG_SEED], index: u64) -> SecretSpendKey {
 /// resulting hash is then used to seed a `ChaCha12` CSPRNG, which is
 /// subsequently used to generate the key.
 pub fn derive_sk(seed: &[u8; RNG_SEED], index: u64) -> SecretKey {
-    SecretKey::random(&mut utils::rng_with_index(seed, index, b"SK"))
+    SecretKey::random(&mut utils::rng_with_index(seed, index, b"SSK"))
 }
 
-/// Generates a public spend key from its seed and index.
+/// Generates a public key from its seed and index.
 ///
-/// The secret spend key is derived from [derive_ssk], and then the key is
-/// generated via [SecretSpendKey::public_spend_key].
-pub fn derive_psk(seed: &[u8; RNG_SEED], index: u64) -> PublicSpendKey {
-    derive_ssk(seed, index).public_spend_key()
+/// First the secret key is derived with [`derive_sk`], then the public key
+/// is generated from it and the secret key is erased from memory.
+pub fn derive_pk(seed: &[u8; RNG_SEED], index: u64) -> PublicKey {
+    let sk = derive_sk(seed, index);
+    PublicKey::from(&sk)
 }
 
 /// Generates a view key from its seed and index.
 ///
-/// The secret spend key is derived from [derive_ssk], and then the key is
-/// generated via [SecretSpendKey::view_key].
+/// First the secret key is derived with [`derive_sk`], then the view key is
+/// generated from it and the secret key is erased from memory.
 pub fn derive_vk(seed: &[u8; RNG_SEED], index: u64) -> ViewKey {
-    derive_ssk(seed, index).view_key()
+    let sk = derive_sk(seed, index);
+    ViewKey::from(&sk)
 }

@@ -7,14 +7,12 @@
 use crate::{key::*, types, utils, MAX_LEN};
 
 use alloc::string::String;
-use ff::Field;
 
-use dusk_bls12_381_sign::PublicKey;
+use bls12_381_bls::PublicKey as StakePublicKey;
 use dusk_jubjub::{BlsScalar, JubJubScalar};
-use dusk_pki::StealthAddress;
-use phoenix_core::*;
-
-use super::stake_contract_types::*;
+use ff::Field;
+use phoenix_core::{Crossover, Fee, Note, PublicKey, StealthAddress};
+use stake_contract_types::{withdraw_signature_message, Withdraw};
 
 /// Get unstake call data
 #[no_mangle]
@@ -44,28 +42,30 @@ pub fn get_withdraw_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let refund = match utils::bs58_to_psk(&refund) {
+    let refund = match utils::bs58_to_pk(&refund) {
         Some(a) => a,
         None => return utils::fail(),
     };
 
-    let sender_psk = derive_ssk(&seed, sender_index).public_spend_key();
-    let sk = derive_sk(&seed, owner_index);
-    let pk = PublicKey::from(&sk);
+    let sender_sk = derive_sk(&seed, sender_index);
+    let sender_pk = PublicKey::from(&sender_sk);
+
+    let stake_sk = derive_stake_sk(&seed, owner_index);
+    let stake_pk = StakePublicKey::from(&stake_sk);
 
     let rng = &mut utils::rng(rng_seed);
 
-    let withdraw_r = JubJubScalar::random(rng);
-    let address: StealthAddress = sender_psk.gen_stealth_address(&withdraw_r);
+    let withdraw_r = JubJubScalar::random(&mut *rng);
+    let address: StealthAddress = sender_pk.gen_stealth_address(&withdraw_r);
     let nonce = BlsScalar::random(&mut *rng);
 
     let msg = withdraw_signature_message(counter, address, nonce);
-    let signature = sk.sign(&pk, &msg);
+    let signature = stake_sk.sign(&stake_pk, &msg);
 
     // Since we're not transferring value *to* the contract the crossover
     // shouldn't contain a value. As such the note used to created it should
     // be valueless as well.
-    let blinder = JubJubScalar::random(rng);
+    let blinder = JubJubScalar::random(&mut *rng);
     let note = Note::obfuscated(rng, &refund, 0, blinder);
     let (mut fee, crossover) = note
         .try_into()
@@ -75,7 +75,7 @@ pub fn get_withdraw_call_data(args: i32, len: i32) -> i64 {
     fee.gas_price = gas_price;
 
     let withdraw = Withdraw {
-        public_key: pk,
+        public_key: stake_pk,
         signature,
         address,
         nonce,

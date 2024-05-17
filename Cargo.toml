@@ -15,21 +15,19 @@ bs58 = { version = "0.5", default-features = false, features = [
     "alloc",
     "cb58",
 ] }
-dusk-bls12_381-sign = { version = "0.5", default-features = false }
+bls12_381-bls = { version = "0.2", default-features = false }
 dusk-bytes = "0.1.7"
-dusk-jubjub = { version = "0.13.1", default-features = false }
-dusk-pki = { version = "0.13", default-features = false, features = [
-    "rkyv-impl",
-] }
-dusk-schnorr = { version = "0.14", default-features = false, features = [
+dusk-jubjub = { version = "0.14", default-features = false }
+jubjub-schnorr = { version = "0.2", default-features = false, features = [
     "rkyv-impl",
     "alloc",
+	"double",
 ] }
-phoenix-core = { version = "0.21", default-features = false, features = [
+phoenix-core = { version = "0.26", default-features = false, features = [
     "alloc",
     "rkyv-impl",
 ] }
-poseidon-merkle = { version = "0.3", features = ["rkyv-impl"] }
+poseidon-merkle = { version = "0.5", features = ["rkyv-impl"] }
 rand_chacha = { version = "^0.3", default-features = false }
 rand_core = "^0.6"
 rkyv = { version = "^0.7", default-features = false, features = ["size_32"] }
@@ -40,22 +38,22 @@ serde = { version = "1.0", default-features = false, features = [
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 sha2 = { version = "^0.10", default-features = false }
 bip39 = { version = "2.0.0", optional = true, default-features = false }
-dusk-plonk = { version = "0.16", default-features = false, features = [
+dusk-plonk = { version = "0.19", default-features = false, features = [
     "alloc",
     "rkyv-impl",
 ] }
-dusk-poseidon = { version = "0.31", default-features = false, features = [
+dusk-poseidon = { version = "0.33", default-features = false, features = [
     "alloc",
     "rkyv-impl",
 ] }
 ff = { version = "0.13", default-features = false }
-dusk-bls12_381 = { version = "0.12.3", default-features = false, features = [
+dusk-bls12_381 = { version = "0.13", default-features = false, features = [
     "alloc",
     "rkyv-impl",
 ] }
-hex = { version = "0.4", default_features = false, features = ["alloc"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 hashbrown = "0.14.3"
-stake-contract-types = "0.0.1-rc.2"
+stake-contract-types = "0.1.0-rc"
 
 [features]
 # rust platforms can use this module without the compact feature
@@ -63,14 +61,14 @@ default = ["compat"]
 compat = ["dep:bip39"]
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-rusk-abi = "0.12.0-rc.0"
+rusk-abi = "0.13.0-rc"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-rusk-abi = { version = "0.12.0-rc.0", default-features = false }
+rusk-abi = { version = "0.13.0-rc", default-features = false }
 
 [dev-dependencies]
 rand = "^0.8"
-wasmer = "=3.1"
+wasmtime = "20"
 
 [build-dependencies]
 schemafy_lib = "0.6"

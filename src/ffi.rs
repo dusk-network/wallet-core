@@ -6,31 +6,40 @@
 
 //! FFI bindings exposed to WASM module.
 
-use alloc::{vec, vec::Vec};
+use alloc::{
+    alloc::{alloc, dealloc, Layout},
+    vec::Vec,
+};
 use core::mem;
 
 use dusk_bytes::Serializable;
-use phoenix_core::{Fee, Note};
+use phoenix_core::{Fee, Note, ViewKey};
 use sha2::{Digest, Sha512};
 
 use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
 
+/// The alignment of the memory allocated by the FFI.
+///
+/// This is 1 because we're not allocating any complex data structures, and
+/// just interacting with the memory directly.
+const ALIGNMENT: usize = 1;
+
 /// Allocates a buffer of `len` bytes on the WASM memory.
 #[no_mangle]
 pub fn allocate(len: i32) -> i32 {
-    let bytes = vec![0u8; len as usize];
-    let ptr = bytes.as_ptr();
-    mem::forget(bytes);
-    ptr as i32
+    unsafe {
+        let layout = Layout::from_size_align_unchecked(len as usize, ALIGNMENT);
+        let ptr = alloc(layout);
+        ptr as _
+    }
 }
 
 /// Frees a previously allocated buffer on the WASM memory.
 #[no_mangle]
 pub fn free_mem(ptr: i32, len: i32) {
-    let ptr = ptr as *mut u8;
-    let len = len as usize;
     unsafe {
-        Vec::from_raw_parts(ptr, len, len);
+        let layout = Layout::from_size_align_unchecked(len as usize, ALIGNMENT);
+        dealloc(ptr as _, layout);
     }
 }
 
@@ -53,11 +62,9 @@ pub fn seed(args: i32, len: i32) -> i64 {
     hash.update(b"SEED");
 
     let seed = hash.finalize().to_vec();
-    let ptr = seed.as_ptr() as u32;
-    let len = seed.len() as u32;
 
-    mem::forget(seed);
-    utils::compose(true, ptr, len)
+    let (ptr, len) = utils::allocated_copy(seed);
+    utils::compose(true, ptr as _, len as _)
 }
 
 /// Computes the total balance of the given notes.
@@ -181,11 +188,11 @@ pub fn execute(args: i32, len: i32) -> i64 {
 
     let mut full_inputs = Vec::with_capacity(inputs.len());
 
-    let view_key = key::derive_vk(&seed, sender_index);
-    let ssk = key::derive_ssk(&seed, sender_index);
+    let sk = key::derive_sk(&seed, sender_index);
+    let vk = ViewKey::from(&sk);
 
     'outer: for input in inputs {
-        if let Ok(value) = input.value(Some(&view_key)) {
+        if let Ok(value) = input.value(Some(&vk)) {
             let opening =
                 match openings.iter().find(|(_, pos)| input.pos() == pos) {
                     Some(a) => a.0,
@@ -194,7 +201,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
                     }
                 };
 
-            let blinder = match input.blinding_factor(Some(&view_key)).ok() {
+            let blinder = match input.blinding_factor(Some(&vk)).ok() {
                 Some(a) => a,
                 None => return utils::fail(),
             };
@@ -218,7 +225,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
             note,
             opening,
             value,
-            ssk: &ssk,
+            sk: &sk,
         })
         .collect();
 
@@ -240,7 +247,7 @@ pub fn execute(args: i32, len: i32) -> i64 {
 
     let rng: &mut rand_chacha::ChaCha12Rng = &mut utils::rng(rng_seed);
     let actual_fee;
-    let refund = match utils::bs58_to_psk(&refund) {
+    let refund = match utils::bs58_to_pk(&refund) {
         Some(r) => r,
         None => return utils::fail(),
     };
@@ -329,17 +336,16 @@ pub fn filter_notes(args: i32, len: i32) -> i64 {
     utils::rkyv_into_ptr(notes)
 }
 
-/// Returns a list of [PublicSpendKey] that belongs to this wallet.
+/// Returns a list of [`PublicKey`]s that belongs to this wallet.
 ///
 /// Expects as argument a fat pointer to a JSON string representing
-/// [types::PublicSpendKeysArgs].
+/// [types::PublicKeysArgs].
 ///
 /// Will return a triplet (status, ptr, len) pointing to JSON string
-/// representing [types::PublicSpendKeysResponse].
+/// representing [types::PublicKeysResponse].
 #[no_mangle]
-pub fn public_spend_keys(args: i32, len: i32) -> i64 {
-    let types::PublicSpendKeysArgs { seed } = match utils::take_args(args, len)
-    {
+pub fn public_keys(args: i32, len: i32) -> i64 {
+    let types::PublicKeysArgs { seed } = match utils::take_args(args, len) {
         Some(a) => a,
         None => return utils::fail(),
     };
@@ -350,11 +356,11 @@ pub fn public_spend_keys(args: i32, len: i32) -> i64 {
     };
 
     let keys = (0..=MAX_KEY)
-        .map(|idx| key::derive_psk(&seed, idx as u64))
-        .map(|psk| bs58::encode(psk.to_bytes()).into_string())
+        .map(|idx| key::derive_pk(&seed, idx as u64))
+        .map(|pk| bs58::encode(pk.to_bytes()).into_string())
         .collect();
 
-    utils::into_ptr(types::PublicSpendKeysResponse { keys })
+    utils::into_ptr(types::PublicKeysResponse { keys })
 }
 
 /// Returns a list of [ViewKey] that belongs to this wallet.
@@ -363,7 +369,7 @@ pub fn public_spend_keys(args: i32, len: i32) -> i64 {
 /// [types::ViewKeysArgs].
 ///
 /// Will return a triplet (status, ptr, len) pointing to the rkyv serialized
-/// [Vec<dusk_pki::ViewKey>].
+/// [`Vec<ViewKey>`].
 #[no_mangle]
 pub fn view_keys(args: i32, len: i32) -> i64 {
     let types::ViewKeysArgs { seed } = match utils::take_args(args, len) {
@@ -376,11 +382,11 @@ pub fn view_keys(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let vks: Vec<_> = (0..=MAX_KEY)
+    let keys: Vec<_> = (0..=MAX_KEY)
         .map(|idx| key::derive_vk(&seed, idx as u64))
         .collect();
 
-    utils::rkyv_into_ptr(vks)
+    utils::rkyv_into_ptr(keys)
 }
 
 /// Returns a list of [BlsScalar] nullifiers for the given [Vec<Note>] combined
@@ -410,22 +416,22 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
     };
 
     let mut nullifiers = Vec::with_capacity(notes.len());
-    let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
-    let mut keys_ssk = unsafe { [mem::zeroed(); MAX_KEY + 1] };
+    let mut sks = unsafe { [mem::zeroed(); MAX_KEY + 1] };
+    let mut vks = unsafe { [mem::zeroed(); MAX_KEY + 1] };
     let mut keys_len = 0;
 
     'outer: for note in notes {
-        // we iterate all the available keys until one can successfully
+        // we iterate all the available view key until one can successfully
         // decrypt the note. if any fails, returns false
         for idx in 0..=MAX_KEY {
             if keys_len == idx {
-                keys_ssk[idx] = key::derive_ssk(&seed, idx as u64);
-                keys[idx] = keys_ssk[idx].view_key();
+                sks[idx] = key::derive_sk(&seed, idx as u64);
+                vks[idx] = ViewKey::from(&sks[idx]);
                 keys_len += 1;
             }
 
-            if keys[idx].owns(&note) {
-                nullifiers.push(note.gen_nullifier(&keys_ssk[idx]));
+            if vks[idx].owns(&note) {
+                nullifiers.push(note.gen_nullifier(&sks[idx]));
                 continue 'outer;
             }
         }

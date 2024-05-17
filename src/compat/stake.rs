@@ -15,20 +15,18 @@ use crate::{
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use bls12_381_bls::PublicKey as StakePublicKey;
 use dusk_bls12_381::BlsScalar;
-use dusk_bls12_381_sign::PublicKey;
-use dusk_bytes::Serializable;
-use dusk_bytes::Write;
+use dusk_bytes::{Serializable, Write};
 use dusk_jubjub::JubJubScalar;
-use dusk_pki::{Ownable, SecretKey as SchnorrKey};
-use dusk_plonk::proof_system::Proof;
-use dusk_schnorr::Signature;
+use dusk_plonk::prelude::Proof;
+use ff::Field;
+use jubjub_schnorr::Signature;
 use phoenix_core::{
     transaction::{stct_signature_message, StakeData},
-    *,
+    Crossover, Fee, Note, Ownable,
 };
-
-use super::stake_contract_types::*;
+use stake_contract_types::{stake_signature_message, Stake};
 
 const STCT_INPUT_SIZE: usize = Fee::SIZE
     + Crossover::SIZE
@@ -64,15 +62,15 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sender = derive_ssk(&seed, sender_index);
-    let refund = match bs58_to_psk(&refund) {
+    let sender = derive_sk(&seed, sender_index);
+    let refund = match bs58_to_pk(&refund) {
         Some(a) => a,
         None => return utils::fail(),
     };
 
     let rng = &mut utils::rng(rng_seed);
 
-    let blinder = JubJubScalar::random(rng);
+    let blinder = JubJubScalar::random(&mut *rng);
     let note = Note::obfuscated(rng, &refund, value, blinder);
     let (mut fee, crossover) = note
         .try_into()
@@ -89,10 +87,8 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
     let stct_message = stct_signature_message(&crossover, value, contract_id);
     let stct_message = dusk_poseidon::sponge::hash(&stct_message);
 
-    let sk_r = *sender.sk_r(fee.stealth_address()).as_ref();
-    let secret = SchnorrKey::from(sk_r);
-
-    let stct_signature = Signature::new(&secret, rng, stct_message);
+    let note_sk = sender.sk_r(fee.stealth_address());
+    let stct_signature = note_sk.sign(rng, stct_message);
 
     let vec_allocation = allocate(STCT_INPUT_SIZE as i32) as *mut _;
     let mut buf: Vec<u8> = unsafe {
@@ -118,8 +114,7 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
     }
     .to_vec();
 
-    let signature = match rkyv::to_bytes::<Signature, MAX_LEN>(&stct_signature)
-    {
+    let stct_sig = match rkyv::to_bytes::<Signature, MAX_LEN>(&stct_signature) {
         Ok(a) => a.to_vec(),
         Err(_) => return utils::fail(),
     };
@@ -141,7 +136,7 @@ pub fn get_stct_proof(args: i32, len: i32) -> i64 {
 
     utils::into_ptr(types::GetStctProofResponse {
         bytes,
-        signature,
+        signature: stct_sig,
         crossover,
         blinder,
         fee,
@@ -154,7 +149,7 @@ pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
     let types::GetStakeCallDataArgs {
         staker_index,
         seed,
-        spend_proof,
+        proof,
         value,
         counter,
     } = match utils::take_args(args, len) {
@@ -162,12 +157,12 @@ pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let spend_proof: [u8; Proof::SIZE] = match spend_proof.try_into().ok() {
+    let proof: [u8; Proof::SIZE] = match proof.try_into().ok() {
         Some(a) => a,
         None => return utils::fail(),
     };
 
-    let proof = match Proof::from_bytes(&spend_proof).ok() {
+    let proof = match Proof::from_bytes(&proof).ok() {
         Some(a) => a.to_bytes().to_vec(),
         None => return utils::fail(),
     };
@@ -177,15 +172,15 @@ pub fn get_stake_call_data(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let sk = derive_sk(&seed, staker_index);
-    let pk = PublicKey::from(&sk);
+    let stake_sk = derive_stake_sk(&seed, staker_index);
+    let stake_pk = StakePublicKey::from(&stake_sk);
 
     let msg = stake_signature_message(counter, value);
-    let signature = sk.sign(&pk, &msg);
+    let stake_sig = stake_sk.sign(&stake_pk, &msg);
 
     let stake = Stake {
-        public_key: pk,
-        signature,
+        public_key: stake_pk,
+        signature: stake_sig,
         value,
         proof,
     };

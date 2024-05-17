@@ -8,10 +8,7 @@ use core::mem::size_of;
 
 use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
-use phoenix_core::{
-    transaction::{ArchivedTreeLeaf, TreeLeaf},
-    Note,
-};
+use phoenix_core::{Note, PublicKey, ViewKey};
 
 use alloc::{string::ToString, vec::Vec};
 
@@ -114,7 +111,7 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
         nullifiers_of_notes,
         block_heights,
         existing_nullifiers,
-        psks,
+        pks,
     } = match utils::take_args(args, len) {
         Some(a) => a,
         None => return utils::fail(),
@@ -129,10 +126,10 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
     let mut spent_notes = Vec::new();
     let mut unspent_notes = Vec::new();
 
-    for (index, ((note, nullifier), psk)) in notes
+    for (index, ((note, nullifier), pk)) in notes
         .into_iter()
         .zip(nullifiers_of_notes)
-        .zip(psks)
+        .zip(pks)
         .enumerate()
     {
         let parsed_note: Note = match rkyv::from_bytes::<Note>(&note).ok() {
@@ -154,7 +151,7 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
         if existing_nullifiers.contains(&parsed_nullifier) {
             spent_notes.push(types::NoteInfoType {
                 pos: *parsed_note.pos(),
-                psk,
+                pk,
                 block_height,
                 note,
                 nullifier,
@@ -164,7 +161,7 @@ pub fn unspent_spent_notes(args: i32, len: i32) -> i64 {
                 pos: *parsed_note.pos(),
                 note,
                 block_height,
-                psk,
+                pk,
                 nullifier,
             });
         }
