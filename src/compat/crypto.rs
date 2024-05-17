@@ -13,7 +13,7 @@ use phoenix_core::{
     Note, PublicKey,
 };
 
-use alloc::vec::Vec;
+use alloc::{string::ToString, vec::Vec};
 
 use crate::alloc::borrow::ToOwned;
 use crate::{
