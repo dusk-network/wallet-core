@@ -13,7 +13,7 @@ use crate::{
 
 use bls12_381_bls::PublicKey as StakePublicKey;
 use dusk_bls12_381::BlsScalar;
-use phoenix_core::{transaction::TreeLeaf, Note};
+use phoenix_core::Note;
 
 use alloc::vec::Vec;
 

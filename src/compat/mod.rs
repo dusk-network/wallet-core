@@ -19,11 +19,3 @@ pub mod tx;
 pub mod unstake;
 /// Includes functions to interact with the stake contract withdraw tx
 pub mod withdraw;
-
-mod stake_contract_types {
-    pub use stake_contract_types::{
-        stake_signature_message, unstake_signature_message,
-        withdraw_signature_message,
-    };
-    pub use stake_contract_types::{Stake, Unstake, Withdraw};
-}
