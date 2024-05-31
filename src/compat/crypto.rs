@@ -29,14 +29,16 @@ const TREE_LEAF_SIZE: usize = size_of::<ArchivedTreeLeaf>();
 /// if its true then nullifier of that note if sent with it
 #[no_mangle]
 pub fn check_note_ownership(args: i32, len: i32) -> i64 {
-    let args = utils::take_args_raw(args, len);
+    // SAFETY: We assume the caller has passed a valid pointer and len as the
+    // function arguments else we might get undefined behavior
+    let args = unsafe { core::slice::from_raw_parts(args as _, len as _) };
 
     let seed = &args[..64];
     let leaves: &[u8] = &args[64..];
 
-    let seed = match seed.try_into().ok() {
-        Some(s) => s,
-        None => return utils::fail(),
+    let seed = match seed.try_into() {
+        Ok(s) => s,
+        Err(_) => return utils::fail(),
     };
 
     let mut leaf_chunk = leaves.chunks_exact(TREE_LEAF_SIZE);
@@ -46,24 +48,31 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
     let mut nullifiers = Vec::new();
     let mut block_heights = Vec::new();
     let mut public_spend_keys = Vec::new();
+    let mut view_keys = Vec::with_capacity(MAX_KEY);
+    let mut secret_keys = Vec::with_capacity(MAX_KEY);
+
+    for idx in 0..MAX_KEY {
+        let idx = idx as u64;
+        let view_key = key::derive_vk(&seed, idx);
+        let sk = key::derive_sk(&seed, idx as _);
+        view_keys.push(view_key);
+        secret_keys.push(sk);
+    }
 
     for leaf_bytes in leaf_chunk.by_ref() {
-        let TreeLeaf { block_height, note } =
-            match rkyv::from_bytes(leaf_bytes).ok() {
-                Some(a) => a,
-                None => {
-                    return utils::fail();
-                }
-            };
+        let TreeLeaf { block_height, note } = match rkyv::from_bytes(leaf_bytes)
+        {
+            Ok(a) => a,
+            Err(_) => {
+                return utils::fail();
+            }
+        };
 
         last_pos = core::cmp::max(last_pos, *note.pos());
 
-        for idx in 0..=MAX_KEY {
-            let idx = idx as u64;
-            let view_key = key::derive_vk(&seed, idx);
-
-            if view_key.owns(&note) {
-                let sk = key::derive_sk(&seed, idx);
+        for idx in 0..MAX_KEY {
+            if view_keys[idx].owns(&note) {
+                let sk = secret_keys[idx];
                 let nullifier = note.gen_nullifier(&sk);
 
                 let nullifier_found =
@@ -77,9 +86,9 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
                     bs58::encode(PublicKey::from(sk).to_bytes()).into_string();
 
                 let raw_note: Vec<u8> =
-                    match rkyv::to_bytes::<Note, MAX_LEN>(&note).ok() {
-                        Some(n) => n.to_vec(),
-                        None => return utils::fail(),
+                    match rkyv::to_bytes::<Note, MAX_LEN>(&note) {
+                        Ok(n) => n.to_vec(),
+                        Err(_) => return utils::fail(),
                     };
 
                 notes.push(raw_note.to_owned());

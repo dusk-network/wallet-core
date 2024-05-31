@@ -92,7 +92,7 @@ pub fn balance(args: i32, len: i32) -> i64 {
         Err(_) => return utils::fail(),
     };
 
-    let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
+    let mut keys = unsafe { [mem::zeroed(); MAX_KEY] };
     let mut values = Vec::with_capacity(notes.len());
     let mut keys_len = 0;
     let mut sum = 0u64;
@@ -100,7 +100,7 @@ pub fn balance(args: i32, len: i32) -> i64 {
     'outer: for note in notes {
         // we iterate all the available keys until one can successfully decrypt
         // the note. if all fails, returns false
-        for idx in 0..=MAX_KEY {
+        for idx in 0..MAX_KEY {
             if keys_len == idx {
                 keys[idx] = key::derive_vk(&seed, idx as u64);
                 keys_len += 1;
@@ -355,7 +355,7 @@ pub fn public_keys(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let keys = (0..=MAX_KEY)
+    let keys = (0..MAX_KEY)
         .map(|idx| key::derive_pk(&seed, idx as u64))
         .map(|pk| bs58::encode(pk.to_bytes()).into_string())
         .collect();
@@ -382,7 +382,7 @@ pub fn view_keys(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let keys: Vec<_> = (0..=MAX_KEY)
+    let keys: Vec<_> = (0..MAX_KEY)
         .map(|idx| key::derive_vk(&seed, idx as u64))
         .collect();
 
@@ -416,14 +416,14 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
     };
 
     let mut nullifiers = Vec::with_capacity(notes.len());
-    let mut sks = unsafe { [mem::zeroed(); MAX_KEY + 1] };
-    let mut vks = unsafe { [mem::zeroed(); MAX_KEY + 1] };
+    let mut sks = unsafe { [mem::zeroed(); MAX_KEY] };
+    let mut vks = unsafe { [mem::zeroed(); MAX_KEY] };
     let mut keys_len = 0;
 
     'outer: for note in notes {
         // we iterate all the available view key until one can successfully
         // decrypt the note. if any fails, returns false
-        for idx in 0..=MAX_KEY {
+        for idx in 0..MAX_KEY {
             if keys_len == idx {
                 sks[idx] = key::derive_sk(&seed, idx as u64);
                 vks[idx] = ViewKey::from(&sks[idx]);

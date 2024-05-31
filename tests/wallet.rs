@@ -100,7 +100,7 @@ fn execute_works() {
         "openings": openings,
         "output": {
             "note_type": "Obfuscated",
-            "receiver": &keys[1],
+            "receiver": &keys[0],
             "ref_id": 15,
             "value": 10,
         },
@@ -200,7 +200,7 @@ fn public_keys_works() {
         PublicKey::from_bytes(&key_array).unwrap();
     }
 
-    assert_eq!(keys.len(), MAX_KEY + 1);
+    assert_eq!(keys.len(), MAX_KEY);
 }
 
 #[test]
@@ -336,8 +336,7 @@ mod node {
             .into_iter()
             .map(|value| {
                 let obfuscated = (rng.next_u32() & 1) == 1;
-                let idx = rng.next_u64()
-                    % (if MAX_KEY == 0 { 1 } else { MAX_KEY }) as u64;
+                let idx = rng.next_u64() % (MAX_KEY) as u64;
                 let sk = key::derive_sk(seed, idx);
                 let pk = PublicKey::from(&sk);
 
