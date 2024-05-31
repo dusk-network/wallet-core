@@ -4,8 +4,6 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
-/// Includes functions to interact with the stake contract allow tx
-pub mod allow;
 /// Helping us with the crypto primitives
 pub mod crypto;
 /// Includes methods to deal with bip39::Mnemonic

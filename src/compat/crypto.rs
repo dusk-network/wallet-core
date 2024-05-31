@@ -4,12 +4,18 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
+use core::mem::size_of;
+
 use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
-use phoenix_core::{Note, PublicKey, ViewKey};
+use phoenix_core::{
+    transaction::{ArchivedTreeLeaf, TreeLeaf},
+    Note, PublicKey,
+};
 
-use alloc::vec::Vec;
+use alloc::{string::ToString, vec::Vec};
 
+use crate::alloc::borrow::ToOwned;
 use crate::{
     key::{self},
     types::{self},
@@ -17,60 +23,85 @@ use crate::{
     MAX_KEY, MAX_LEN,
 };
 
+const TREE_LEAF_SIZE: usize = size_of::<ArchivedTreeLeaf>();
+
 /// Returns true or false if the note is owned by the index
 /// if its true then nullifier of that note if sent with it
 #[no_mangle]
 pub fn check_note_ownership(args: i32, len: i32) -> i64 {
-    // we just use BalanceArgs again as we don't want to add more cluter types
-    // when the data you want is the same
-    let types::CheckNoteOwnershipArgs { note, seed } =
-        match utils::take_args(args, len) {
-            Some(a) => a,
-            None => return utils::fail(),
-        };
+    let args = utils::take_args_raw(args, len);
 
-    let seed = match utils::sanitize_seed(seed) {
+    let seed = &args[..64];
+    let leaves: &[u8] = &args[64..];
+
+    let seed = match seed.try_into().ok() {
         Some(s) => s,
         None => return utils::fail(),
     };
 
-    let note: Note = match rkyv::from_bytes(&note) {
-        Ok(n) => n,
-        Err(_) => return utils::fail(),
-    };
+    let mut leaf_chunk = leaves.chunks_exact(TREE_LEAF_SIZE);
+    let mut last_pos = 0;
 
-    let mut is_owned: bool = false;
-    let mut nullifier_found = BlsScalar::default();
-    let mut pk_found: Option<PublicKey> = None;
+    let mut notes = Vec::new();
+    let mut nullifiers = Vec::new();
+    let mut block_heights = Vec::new();
+    let mut public_spend_keys = Vec::new();
 
-    for idx in 0..=MAX_KEY {
-        let idx = idx as u64;
-        let sk = key::derive_sk(&seed, idx);
-        let vk = ViewKey::from(&sk);
+    for leaf_bytes in leaf_chunk.by_ref() {
+        let TreeLeaf { block_height, note } =
+            match rkyv::from_bytes(leaf_bytes).ok() {
+                Some(a) => a,
+                None => {
+                    return utils::fail();
+                }
+            };
 
-        if vk.owns(&note) {
-            let nullifier = note.gen_nullifier(&sk);
+        last_pos = core::cmp::max(last_pos, *note.pos());
 
-            nullifier_found = nullifier;
-            is_owned = true;
-            pk_found = Some(PublicKey::from(&sk));
+        for idx in 0..=MAX_KEY {
+            let idx = idx as u64;
+            let view_key = key::derive_vk(&seed, idx);
 
-            break;
+            if view_key.owns(&note) {
+                let sk = key::derive_sk(&seed, idx);
+                let nullifier = note.gen_nullifier(&sk);
+
+                let nullifier_found =
+                    match rkyv::to_bytes::<BlsScalar, MAX_LEN>(&nullifier).ok()
+                    {
+                        Some(n) => n.to_vec(),
+                        None => return utils::fail(),
+                    };
+
+                let psk_found =
+                    bs58::encode(PublicKey::from(sk).to_bytes()).into_string();
+
+                let raw_note: Vec<u8> =
+                    match rkyv::to_bytes::<Note, MAX_LEN>(&note).ok() {
+                        Some(n) => n.to_vec(),
+                        None => return utils::fail(),
+                    };
+
+                notes.push(raw_note.to_owned());
+                block_heights.push(block_height);
+                public_spend_keys.push(psk_found);
+                nullifiers.push(nullifier_found);
+            }
         }
     }
 
-    let pk_found = pk_found.map(|pk| bs58::encode(pk.to_bytes()).into_string());
-
-    let nullifier_found =
-        match rkyv::to_bytes::<BlsScalar, MAX_LEN>(&nullifier_found).ok() {
-            Some(n) => n.to_vec(),
-            None => return utils::fail(),
-        };
+    let block_heights = block_heights
+        .iter()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
 
     utils::into_ptr(types::CheckNoteOwnershipResponse {
-        is_owned,
-        nullifier: nullifier_found,
-        public_key: pk_found,
+        notes,
+        block_heights,
+        public_spend_keys,
+        nullifiers,
+        last_pos,
     })
 }
 
