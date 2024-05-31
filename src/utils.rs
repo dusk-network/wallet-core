@@ -64,6 +64,14 @@ where
     serde_json::from_str(&args).ok()
 }
 
+/// reads the raw bytes at the pointer for the length and returns what it reason
+pub fn take_args_raw<'a>(args: i32, len: i32) -> &'a [u8] {
+    let args = args as *mut u8;
+    let len = len as usize;
+
+    unsafe { core::slice::from_raw_parts(args, len) }
+}
+
 /// Sanitizes arbitrary bytes into well-formed seed.
 pub fn sanitize_seed(bytes: Vec<u8>) -> Option<[u8; RNG_SEED]> {
     (bytes.len() == RNG_SEED).then(|| {

@@ -20,7 +20,7 @@ pub mod types;
 pub mod utils;
 /// The maximum number of keys (inclusive) to derive when attempting to decrypt
 /// a note.
-pub const MAX_KEY: usize = 24;
+pub const MAX_KEY: usize = 0;
 
 /// The maximum allocated buffer for rkyv serialization.
 pub const MAX_LEN: usize = rusk_abi::ARGBUF_LEN;

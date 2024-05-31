@@ -5,9 +5,7 @@
     "SeedArgs": {
       "description": "The arguments of the seed function",
       "type": "object",
-      "required": [
-        "passphrase"
-      ],
+      "required": ["passphrase"],
       "properties": {
         "passphrase": {
           "description": "An arbitrary sequence of bytes used to generate a secure seed",
@@ -23,10 +21,7 @@
     "BalanceArgs": {
       "description": "The arguments of the balance function",
       "type": "object",
-      "required": [
-        "notes",
-        "seed"
-      ],
+      "required": ["notes", "seed"],
       "properties": {
         "notes": {
           "description": "A rkyv serialized [Vec<phoenix_core::Note>]; all notes should have their keys derived from `seed`",
@@ -53,10 +48,7 @@
     "BalanceResponse": {
       "description": "The response of the balance function",
       "type": "object",
-      "required": [
-        "maximum",
-        "value"
-      ],
+      "required": ["maximum", "value"],
       "properties": {
         "maximum": {
           "description": "Maximum value per transaction",
@@ -75,11 +67,7 @@
     "ExecuteCall": {
       "description": "A call to a contract method",
       "type": "object",
-      "required": [
-        "contract",
-        "method",
-        "payload"
-      ],
+      "required": ["contract", "method", "payload"],
       "properties": {
         "contract": {
           "description": "The id of the contract to call in Base58 format",
@@ -103,19 +91,12 @@
     "OutputType": {
       "description": "A note type variant",
       "type": "string",
-      "enum": [
-        "Transparent",
-        "Obfuscated"
-      ]
+      "enum": ["Transparent", "Obfuscated"]
     },
     "ExecuteOutput": {
       "description": "The output of a transfer",
       "type": "object",
-      "required": [
-        "note_type",
-        "value",
-        "receiver"
-      ],
+      "required": ["note_type", "value", "receiver"],
       "properties": {
         "note_type": {
           "description": "The type of the note",
@@ -287,9 +268,7 @@
     "MergeNotesArgs": {
       "description": "The arguments of the merge_notes function",
       "type": "object",
-      "required": [
-        "notes"
-      ],
+      "required": ["notes"],
       "properties": {
         "notes": {
           "description": "All serialized list of notes to be merged",
@@ -308,10 +287,7 @@
     "FilterNotesArgs": {
       "description": "The arguments of the filter_notes function",
       "type": "object",
-      "required": [
-        "flags",
-        "notes"
-      ],
+      "required": ["flags", "notes"],
       "properties": {
         "flags": {
           "description": "Boolean flags to be negative filtered",
@@ -334,9 +310,7 @@
     "PublicSpendKeysArgs": {
       "description": "The arguments of the public_spend_keys function",
       "type": "object",
-      "required": [
-        "seed"
-      ],
+      "required": ["seed"],
       "properties": {
         "seed": {
           "description": "Seed used to derive the keys of the wallet",
@@ -354,9 +328,7 @@
     "PublicSpendKeysResponse": {
       "description": "The response of the public_spend_keys function",
       "type": "object",
-      "required": [
-        "keys"
-      ],
+      "required": ["keys"],
       "properties": {
         "keys": {
           "description": "The Base58 public spend keys of the wallet.",
@@ -370,9 +342,7 @@
     "ViewKeysArgs": {
       "description": "The arguments of the view_keys function",
       "type": "object",
-      "required": [
-        "seed"
-      ],
+      "required": ["seed"],
       "properties": {
         "seed": {
           "description": "Seed used to derive the keys of the wallet",
@@ -390,10 +360,7 @@
     "NullifiersArgs": {
       "description": "The arguments of the nullifiers function",
       "type": "object",
-      "required": [
-        "notes",
-        "seed"
-      ],
+      "required": ["notes", "seed"],
       "properties": {
         "notes": {
           "description": "A rkyv serialized [Vec<phoenix_core::Note>] to have nullifiers generated",
@@ -433,9 +400,7 @@
     "RkyvTreeLeaf": {
       "description": "The arguments of the balance function",
       "type": "object",
-      "required": [
-        "bytes"
-      ],
+      "required": ["bytes"],
       "properties": {
         "bytes": {
           "description": "Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf",
@@ -448,41 +413,33 @@
         }
       }
     },
-    "RkyvTreeLeafResponse": {
-      "description": "The response of the public_spend_keys function",
+    "RkyvTreeLeafArgs": {
+      "description": "The arguments of the rkyv tree leaf function",
       "type": "object",
-      "required": [
-        "block_height",
-        "note",
-        "last_pos"
-      ],
+      "required": ["bytes", "seed"],
       "properties": {
-        "block_height": {
-          "description": "The block height of the note.",
-          "type": "integer",
-          "format": "uint64"
-        },
-        "note": {
-          "description": "Bytes of note at the block_height",
+        "bytes": {
+          "description": "Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf",
           "type": "array",
           "items": {
             "type": "integer",
             "format": "uint8"
           }
         },
-        "last_pos": {
-          "description": "Last position of the note",
-          "type": "integer",
-          "format": "uint64"
+        "seed": {
+          "description": "Seed used to derive the keys of the wallet",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8"
+          }
         }
       }
     },
     "RkyvNotesArray": {
       "description": "The arguments of the rkyv_notes_array function",
       "type": "object",
-      "required": [
-        "notes"
-      ],
+      "required": ["notes"],
       "properties": {
         "notes": {
           "description": "Array of notes which are rkyv serialized",
@@ -576,44 +533,53 @@
         }
       }
     },
-    "CheckNoteOwnershipArgs": {
-      "description": "Arguments of the check_note_ownership function",
-      "type": "object",
-      "required": ["note", "seed"],
-      "properties": {
-        "note": {
-          "description": "A singular note we want to check the validity of",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "uint8"
-          }
-        },
-        "seed": {
-          "description": "The seed to generate the view keys from",
-          "type": "array",
-          "items": {
-            "type": "integer",
-            "format": "uint8"
-          }
-        }
-      }
-    },
     "CheckNoteOwnershipResponse": {
       "description": "Response of check_note_ownership function",
       "type": "object",
-      "required": ["is_owned", "nullifier"],
+      "required": [
+        "notes",
+        "last_pos",
+        "block_heights",
+        "public_spend_keys",
+        "nullifiers"
+      ],
       "properties": {
-        "is_owned": {
-          "description": "Is the note owned by any of the view keys in the provided seed",
-          "type": "boolean"
-        },
-        "nullifier": {
-          "description": "Nullifier of the note that we were checking the ownership of",
+        "notes": {
+          "description": "The raw owned note",
           "type": "array",
           "items": {
-            "type": "integer",
-            "format": "uint8"
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
+          }
+        },
+        "last_pos": {
+          "description": "The last position of the note",
+          "type": "integer",
+          "format": "uint64"
+        },
+        "block_heights": {
+          "description": "The block heights of the notes in the same order the notes were returned seperated by comma",
+          "type": "string"
+        },
+        "public_spend_keys": {
+          "description": "The public spend keys of the notes in the same order the notes were returned",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nullifiers": {
+          "description": "The nullifiers of the notes in the same order the notes were returned",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8"
+            }
           }
         },
         "public_spend_key": {
@@ -854,7 +820,15 @@
     "GetStctProofArgs": {
       "description": "Get the bytes for the stct proof to send to the node",
       "type": "object",
-      "required": ["rng_seed", "seed", "refund", "value", "sender_index", "gas_limit", "gas_price"],
+      "required": [
+        "rng_seed",
+        "seed",
+        "refund",
+        "value",
+        "sender_index",
+        "gas_limit",
+        "gas_price"
+      ],
       "properties": {
         "rng_seed": {
           "description": "The rng seed to generate the entropy for the notes",
@@ -1099,7 +1073,13 @@
     "GetUnstakeCallDataArgs": {
       "description": "Args of the get_unstake_call_data function",
       "type": "object",
-      "required": ["seed", "sender_index", "unstake_note", "counter", "unstake_proof"],
+      "required": [
+        "seed",
+        "sender_index",
+        "unstake_note",
+        "counter",
+        "unstake_proof"
+      ],
       "properties": {
         "seed": {
           "description": "The seed to generate the sender keys from",
@@ -1187,7 +1167,16 @@
     "GetAllowCallDataArgs": {
       "description": "Arguments for get_allow_call_data function",
       "type": "object",
-      "required": ["seed", "rng_seed", "sender_index", "refund", "owner_index", "counter", "gas_limit", "gas_price"],
+      "required": [
+        "seed",
+        "rng_seed",
+        "sender_index",
+        "refund",
+        "owner_index",
+        "counter",
+        "gas_limit",
+        "gas_price"
+      ],
       "properties": {
         "seed": {
           "description": "Seed of the wallet",
@@ -1239,7 +1228,14 @@
     "GetAllowCallDataResponse": {
       "description": "Response of the get_allow_call_data function",
       "type": "object",
-      "required": ["contract", "method", "payload", "blinder", "crossover", "fee"],
+      "required": [
+        "contract",
+        "method",
+        "payload",
+        "blinder",
+        "crossover",
+        "fee"
+      ],
       "properties": {
         "contract": {
           "description": "The id of the contract to call in Base58 format",
@@ -1376,15 +1372,19 @@
     "TransactionDirectionType": {
       "description": "The direction of the transaction",
       "type": "string",
-      "enum": [
-        "In",
-        "Out"
-      ]
+      "enum": ["In", "Out"]
     },
     "TransactionHistoryType": {
       "description": "The type of the transaction history",
       "type": "object",
-      "required": ["direction", "block_height", "fee", "amount", "id", "tx_type"],
+      "required": [
+        "direction",
+        "block_height",
+        "fee",
+        "amount",
+        "id",
+        "tx_type"
+      ],
       "properties": {
         "direction": {
           "description": "The direction of the transaction, in or out",

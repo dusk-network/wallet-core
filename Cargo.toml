@@ -1,10 +1,10 @@
 [package]
 name = "dusk-wallet-core"
-version = "0.21.6"
+version = "0.21.8"
 edition = "2021"
 description = "The core functionality of the Dusk wallet"
 license = "MPL-2.0"
-respository = "https://github.com/dusk-network/wallet-core"
+repository = "https://github.com/dusk-network/wallet-core"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -75,3 +75,8 @@ wasmtime = "20"
 
 [build-dependencies]
 schemafy_lib = "0.6"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 'z'
