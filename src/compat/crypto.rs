@@ -33,8 +33,7 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
     // function arguments else we might get undefined behavior
     let args = unsafe { core::slice::from_raw_parts(args as _, len as _) };
 
-    let seed = &args[..64];
-    let leaves: &[u8] = &args[64..];
+    let (seed, leaves) = args.split_at(64);
 
     let seed = match seed.try_into() {
         Ok(s) => s,
