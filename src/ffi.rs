@@ -13,7 +13,7 @@ use alloc::{
 use core::mem;
 
 use dusk_bytes::Serializable;
-use phoenix_core::{Fee, Note, ViewKey};
+use phoenix_core::{Fee, Note, SecretKey, ViewKey};
 use sha2::{Digest, Sha512};
 
 use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
@@ -92,20 +92,16 @@ pub fn balance(args: i32, len: i32) -> i64 {
         Err(_) => return utils::fail(),
     };
 
-    let mut keys = unsafe { [mem::zeroed(); MAX_KEY] };
+    let keys: [ViewKey; MAX_KEY] =
+        core::array::from_fn(|i| key::derive_vk(&seed, i as _));
+
     let mut values = Vec::with_capacity(notes.len());
-    let mut keys_len = 0;
     let mut sum = 0u64;
 
     'outer: for note in notes {
         // we iterate all the available keys until one can successfully decrypt
         // the note. if all fails, returns false
         for idx in 0..MAX_KEY {
-            if keys_len == idx {
-                keys[idx] = key::derive_vk(&seed, idx as u64);
-                keys_len += 1;
-            }
-
             if let Ok(v) = note.value(Some(&keys[idx])) {
                 values.push(v);
                 sum = sum.saturating_add(v);
@@ -416,20 +412,16 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
     };
 
     let mut nullifiers = Vec::with_capacity(notes.len());
-    let mut sks = unsafe { [mem::zeroed(); MAX_KEY] };
-    let mut vks = unsafe { [mem::zeroed(); MAX_KEY] };
-    let mut keys_len = 0;
+
+    let sks: [SecretKey; MAX_KEY] =
+        core::array::from_fn(|i| key::derive_sk(&seed, i as _));
+    let vks: [ViewKey; MAX_KEY] =
+        core::array::from_fn(|i| key::derive_vk(&seed, i as _));
 
     'outer: for note in notes {
         // we iterate all the available view key until one can successfully
         // decrypt the note. if any fails, returns false
         for idx in 0..MAX_KEY {
-            if keys_len == idx {
-                sks[idx] = key::derive_sk(&seed, idx as u64);
-                vks[idx] = ViewKey::from(&sks[idx]);
-                keys_len += 1;
-            }
-
             if vks[idx].owns(&note) {
                 nullifiers.push(note.gen_nullifier(&sks[idx]));
                 continue 'outer;
