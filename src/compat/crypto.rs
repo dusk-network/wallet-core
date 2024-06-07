@@ -10,7 +10,7 @@ use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
 use phoenix_core::{
     transaction::{ArchivedTreeLeaf, TreeLeaf},
-    Note, PublicKey,
+    Note, PublicKey, SecretKey, ViewKey,
 };
 
 use alloc::{string::ToString, vec::Vec};
@@ -48,16 +48,10 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
     let mut nullifiers = Vec::new();
     let mut block_heights = Vec::new();
     let mut public_spend_keys = Vec::new();
-    let mut view_keys = Vec::with_capacity(MAX_KEY);
-    let mut secret_keys = Vec::with_capacity(MAX_KEY);
-
-    for idx in 0..MAX_KEY {
-        let idx = idx as u64;
-        let view_key = key::derive_vk(&seed, idx);
-        let sk = key::derive_sk(&seed, idx as _);
-        view_keys.push(view_key);
-        secret_keys.push(sk);
-    }
+    let view_keys: [ViewKey; MAX_KEY] =
+        core::array::from_fn(|i| key::derive_vk(&seed, i as _));
+    let secret_keys: [SecretKey; MAX_KEY] =
+        core::array::from_fn(|i| key::derive_sk(&seed, i as _));
 
     for leaf_bytes in leaf_chunk.by_ref() {
         let TreeLeaf { block_height, note } = match rkyv::from_bytes(leaf_bytes)
