@@ -419,14 +419,11 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
         core::array::from_fn(|i| key::derive_vk(&seed, i as _));
 
     for note in notes {
-        for idx in 0..MAX_KEY {
-            if vks[idx].owns(&note) {
-                nullifiers.push(note.gen_nullifier(&sks[idx]));
-                break;
-            }
-        }
+        let Some(vk_idx) = vks.iter().position(|vk| vk.owns(&note)) else {
+            return utils::fail();
+        };
 
-        return utils::fail();
+        nullifiers.push(note.gen_nullifier(&sks[vk_idx]));
     }
 
     utils::rkyv_into_ptr(nullifiers)
