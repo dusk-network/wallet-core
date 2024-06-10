@@ -418,13 +418,11 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
     let vks: [ViewKey; MAX_KEY] =
         core::array::from_fn(|i| key::derive_vk(&seed, i as _));
 
-    'outer: for note in notes {
-        // we iterate all the available view key until one can successfully
-        // decrypt the note. if any fails, returns false
+    for note in notes {
         for idx in 0..MAX_KEY {
             if vks[idx].owns(&note) {
                 nullifiers.push(note.gen_nullifier(&sks[idx]));
-                continue 'outer;
+                break;
             }
         }
 
