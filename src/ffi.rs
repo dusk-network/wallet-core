@@ -10,7 +10,6 @@ use alloc::{
     alloc::{alloc, dealloc, Layout},
     vec::Vec,
 };
-use core::mem;
 
 use dusk_bytes::Serializable;
 use phoenix_core::{Fee, Note, SecretKey, ViewKey};
@@ -419,11 +418,11 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
         core::array::from_fn(|i| key::derive_vk(&seed, i as _));
 
     for note in notes {
-        let Some(vk_idx) = vks.iter().position(|vk| vk.owns(&note)) else {
+        let Some(idx) = vks.iter().position(|vk| vk.owns(&note)) else {
             return utils::fail();
         };
 
-        nullifiers.push(note.gen_nullifier(&sks[vk_idx]));
+        nullifiers.push(note.gen_nullifier(&sks[idx]));
     }
 
     utils::rkyv_into_ptr(nullifiers)

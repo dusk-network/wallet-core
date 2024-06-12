@@ -336,7 +336,7 @@ mod node {
             .into_iter()
             .map(|value| {
                 let obfuscated = (rng.next_u32() & 1) == 1;
-                let idx = rng.next_u64() % (MAX_KEY) as u64;
+                let idx = rng.next_u64() % MAX_KEY as u64;
                 let sk = key::derive_sk(seed, idx);
                 let pk = PublicKey::from(&sk);
 
