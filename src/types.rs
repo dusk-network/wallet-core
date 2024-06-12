@@ -31,24 +31,19 @@ pub struct BalanceResponse {
     #[doc = " Total computed balance"]
     pub value: u64,
 }
-#[doc = " Arguments of the check_note_ownership function"]
-#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct CheckNoteOwnershipArgs {
-    #[doc = " A singular note we want to check the validity of"]
-    pub note: Vec<u8>,
-    #[doc = " The seed to generate the view keys from"]
-    pub seed: Vec<u8>,
-}
 #[doc = " Response of check_note_ownership function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
 pub struct CheckNoteOwnershipResponse {
-    #[doc = " Is the note owned by any of the view keys in the provided seed"]
-    pub is_owned: bool,
-    #[doc = " Nullifier of the note that we were checking the ownership of"]
-    pub nullifier: Vec<u8>,
-    #[doc = " A base 58 encoded public key string"]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_key: Option<String>,
+    #[doc = " The block heights of the notes in the same order the notes were returned seperated by comma"]
+    pub block_heights: String,
+    #[doc = " The last position of the note"]
+    pub last_pos: u64,
+    #[doc = " The raw owned note"]
+    pub notes: Vec<Vec<u8>>,
+    #[doc = " The nullifiers of the notes in the same order the notes were returned"]
+    pub nullifiers: Vec<Vec<u8>>,
+    #[doc = " The public spend keys of the notes in the same order the notes were returned"]
+    pub public_spend_keys: Vec<String>,
 }
 #[doc = " The value of the Crossover and the blinder"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
@@ -453,15 +448,13 @@ pub struct RkyvTreeLeaf {
     #[doc = " Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf"]
     pub bytes: Vec<u8>,
 }
-#[doc = " The response of the public_keys function"]
+#[doc = " The arguments of the rkyv tree leaf function"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
-pub struct RkyvTreeLeafResponse {
-    #[doc = " The block height of the note."]
-    pub block_height: u64,
-    #[doc = " Last position of the note"]
-    pub last_pos: u64,
-    #[doc = " Bytes of note at the block_height"]
-    pub note: Vec<u8>,
+pub struct RkyvTreeLeafArgs {
+    #[doc = " Bytes that are rkyv serialized into a phoenix_core::transaction::TreeLeaf"]
+    pub bytes: Vec<u8>,
+    #[doc = " Seed used to derive the keys of the wallet"]
+    pub seed: Vec<u8>,
 }
 #[doc = " A serialized u64 using rkyv"]
 #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]

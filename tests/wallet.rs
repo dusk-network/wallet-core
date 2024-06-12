@@ -100,7 +100,7 @@ fn execute_works() {
         "openings": openings,
         "output": {
             "note_type": "Obfuscated",
-            "receiver": &keys[1],
+            "receiver": &keys[0],
             "ref_id": 15,
             "value": 10,
         },
@@ -200,7 +200,7 @@ fn public_keys_works() {
         PublicKey::from_bytes(&key_array).unwrap();
     }
 
-    assert_eq!(keys.len(), MAX_KEY + 1);
+    assert_eq!(keys.len(), MAX_KEY);
 }
 
 #[test]

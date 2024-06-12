@@ -1,6 +1,6 @@
 [package]
 name = "dusk-wallet-core"
-version = "0.21.6"
+version = "0.21.8"
 edition = "2021"
 description = "The core functionality of the Dusk wallet"
 license = "MPL-2.0"
@@ -21,7 +21,7 @@ dusk-jubjub = { version = "0.14", default-features = false }
 jubjub-schnorr = { version = "0.2", default-features = false, features = [
     "rkyv-impl",
     "alloc",
-	"double",
+    "double",
 ] }
 phoenix-core = { version = "0.26", default-features = false, features = [
     "alloc",
@@ -73,3 +73,8 @@ wasmtime = "20"
 
 [build-dependencies]
 schemafy_lib = "0.6"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 'z'

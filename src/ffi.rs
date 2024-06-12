@@ -10,10 +10,9 @@ use alloc::{
     alloc::{alloc, dealloc, Layout},
     vec::Vec,
 };
-use core::mem;
 
 use dusk_bytes::Serializable;
-use phoenix_core::{Fee, Note, ViewKey};
+use phoenix_core::{Fee, Note, SecretKey, ViewKey};
 use sha2::{Digest, Sha512};
 
 use crate::{key, tx, types, utils, MAX_KEY, MAX_LEN};
@@ -92,20 +91,16 @@ pub fn balance(args: i32, len: i32) -> i64 {
         Err(_) => return utils::fail(),
     };
 
-    let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
+    let keys: [ViewKey; MAX_KEY] =
+        core::array::from_fn(|i| key::derive_vk(&seed, i as _));
+
     let mut values = Vec::with_capacity(notes.len());
-    let mut keys_len = 0;
     let mut sum = 0u64;
 
     'outer: for note in notes {
         // we iterate all the available keys until one can successfully decrypt
         // the note. if all fails, returns false
-        for idx in 0..=MAX_KEY {
-            if keys_len == idx {
-                keys[idx] = key::derive_vk(&seed, idx as u64);
-                keys_len += 1;
-            }
-
+        for idx in 0..MAX_KEY {
             if let Ok(v) = note.value(Some(&keys[idx])) {
                 values.push(v);
                 sum = sum.saturating_add(v);
@@ -355,7 +350,7 @@ pub fn public_keys(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let keys = (0..=MAX_KEY)
+    let keys = (0..MAX_KEY)
         .map(|idx| key::derive_pk(&seed, idx as u64))
         .map(|pk| bs58::encode(pk.to_bytes()).into_string())
         .collect();
@@ -382,7 +377,7 @@ pub fn view_keys(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let keys: Vec<_> = (0..=MAX_KEY)
+    let keys: Vec<_> = (0..MAX_KEY)
         .map(|idx| key::derive_vk(&seed, idx as u64))
         .collect();
 
@@ -416,27 +411,18 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
     };
 
     let mut nullifiers = Vec::with_capacity(notes.len());
-    let mut sks = unsafe { [mem::zeroed(); MAX_KEY + 1] };
-    let mut vks = unsafe { [mem::zeroed(); MAX_KEY + 1] };
-    let mut keys_len = 0;
 
-    'outer: for note in notes {
-        // we iterate all the available view key until one can successfully
-        // decrypt the note. if any fails, returns false
-        for idx in 0..=MAX_KEY {
-            if keys_len == idx {
-                sks[idx] = key::derive_sk(&seed, idx as u64);
-                vks[idx] = ViewKey::from(&sks[idx]);
-                keys_len += 1;
-            }
+    let sks: [SecretKey; MAX_KEY] =
+        core::array::from_fn(|i| key::derive_sk(&seed, i as _));
+    let vks: [ViewKey; MAX_KEY] =
+        core::array::from_fn(|i| key::derive_vk(&seed, i as _));
 
-            if vks[idx].owns(&note) {
-                nullifiers.push(note.gen_nullifier(&sks[idx]));
-                continue 'outer;
-            }
-        }
+    for note in notes {
+        let Some(idx) = vks.iter().position(|vk| vk.owns(&note)) else {
+            return utils::fail();
+        };
 
-        return utils::fail();
+        nullifiers.push(note.gen_nullifier(&sks[idx]));
     }
 
     utils::rkyv_into_ptr(nullifiers)
