@@ -42,9 +42,6 @@ pub struct CheckNoteOwnershipResponse {
     pub notes: Vec<Vec<u8>>,
     #[doc = " The nullifiers of the notes in the same order the notes were returned"]
     pub nullifiers: Vec<Vec<u8>>,
-    #[doc = " A base 58 encoded public spend key string"]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub public_spend_key: Option<String>,
     #[doc = " The public spend keys of the notes in the same order the notes were returned"]
     pub public_spend_keys: Vec<String>,
 }

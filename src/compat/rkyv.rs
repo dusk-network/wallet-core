@@ -12,9 +12,8 @@ use crate::{
 };
 
 use dusk_bls12_381::BlsScalar;
-use phoenix_core::Note;
 use dusk_bls12_381_sign::PublicKey;
-use phoenix_core::{transaction::TreeLeaf, Note};
+use phoenix_core::Note;
 
 use alloc::vec::Vec;
 

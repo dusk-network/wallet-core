@@ -8,9 +8,10 @@ use core::mem::size_of;
 
 use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
+use dusk_pki::PublicSpendKey;
 use phoenix_core::{
     transaction::{ArchivedTreeLeaf, TreeLeaf},
-    Note, PublicKey,
+    Note,
 };
 
 use alloc::{string::ToString, vec::Vec};
@@ -63,8 +64,8 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
             let view_key = key::derive_vk(&seed, idx);
 
             if view_key.owns(&note) {
-                let sk = key::derive_sk(&seed, idx);
-                let nullifier = note.gen_nullifier(&sk);
+                let ssk = key::derive_ssk(&seed, idx);
+                let nullifier = note.gen_nullifier(&ssk);
 
                 let nullifier_found =
                     match rkyv::to_bytes::<BlsScalar, MAX_LEN>(&nullifier).ok()
@@ -74,7 +75,8 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
                     };
 
                 let psk_found =
-                    bs58::encode(PublicKey::from(sk).to_bytes()).into_string();
+                    bs58::encode(PublicSpendKey::from(ssk).to_bytes())
+                        .into_string();
 
                 let raw_note: Vec<u8> =
                     match rkyv::to_bytes::<Note, MAX_LEN>(&note).ok() {
