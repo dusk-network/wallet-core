@@ -431,10 +431,10 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
                 keys_len += 1;
             }
 
-            if keys[idx].owns(&note) {
-                nullifiers.push(note.gen_nullifier(&keys_ssk[idx]));
-                continue 'outer;
-            }
+            // if keys[idx].owns(&note) {
+            //     nullifiers.push(note.gen_nullifier(&keys_ssk[idx]));
+            //     continue 'outer;
+            // }
         }
 
         return utils::fail();

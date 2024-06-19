@@ -63,32 +63,32 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
             let idx = idx as u64;
             let view_key = key::derive_vk(&seed, idx);
 
-            if view_key.owns(&note) {
-                let ssk = key::derive_ssk(&seed, idx);
-                let nullifier = note.gen_nullifier(&ssk);
-
-                let nullifier_found =
-                    match rkyv::to_bytes::<BlsScalar, MAX_LEN>(&nullifier).ok()
-                    {
-                        Some(n) => n.to_vec(),
-                        None => return utils::fail(),
-                    };
-
-                let psk_found =
-                    bs58::encode(PublicSpendKey::from(ssk).to_bytes())
-                        .into_string();
-
-                let raw_note: Vec<u8> =
-                    match rkyv::to_bytes::<Note, MAX_LEN>(&note).ok() {
-                        Some(n) => n.to_vec(),
-                        None => return utils::fail(),
-                    };
-
-                notes.push(raw_note.to_owned());
-                block_heights.push(block_height);
-                public_spend_keys.push(psk_found);
-                nullifiers.push(nullifier_found);
-            }
+            // if view_key.owns(&note) {
+            //     let ssk = key::derive_ssk(&seed, idx);
+            //     let nullifier = note.gen_nullifier(&ssk);
+            //
+            //     let nullifier_found =
+            //         match rkyv::to_bytes::<BlsScalar,
+            // MAX_LEN>(&nullifier).ok()         {
+            //             Some(n) => n.to_vec(),
+            //             None => return utils::fail(),
+            //         };
+            //
+            //     let psk_found =
+            //         bs58::encode(PublicSpendKey::from(ssk).to_bytes())
+            //             .into_string();
+            //
+            //     let raw_note: Vec<u8> =
+            //         match rkyv::to_bytes::<Note, MAX_LEN>(&note).ok() {
+            //             Some(n) => n.to_vec(),
+            //             None => return utils::fail(),
+            //         };
+            //
+            //     notes.push(raw_note.to_owned());
+            //     block_heights.push(block_height);
+            //     public_spend_keys.push(psk_found);
+            //     nullifiers.push(nullifier_found);
+            // }
         }
     }
 
