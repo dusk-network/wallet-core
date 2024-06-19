@@ -44,8 +44,8 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
     let mut last_pos = 0;
 
     let mut notes = Vec::new();
-    let mut nullifiers = Vec::new();
-    let mut block_heights = Vec::new();
+    let mut nullifiers: Vec<Vec<u8>> = Vec::new();
+    let mut block_heights: Vec<u64> = Vec::new();
     let mut public_spend_keys = Vec::new();
 
     for leaf_bytes in leaf_chunk.by_ref() {

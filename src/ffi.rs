@@ -12,6 +12,7 @@ use alloc::{
 };
 use core::mem;
 
+use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
 use phoenix_core::{Fee, Note};
 use sha2::{Digest, Sha512};
@@ -416,7 +417,7 @@ pub fn nullifiers(args: i32, len: i32) -> i64 {
         None => return utils::fail(),
     };
 
-    let mut nullifiers = Vec::with_capacity(notes.len());
+    let mut nullifiers: Vec<BlsScalar> = Vec::with_capacity(notes.len());
     let mut keys = unsafe { [mem::zeroed(); MAX_KEY + 1] };
     let mut keys_ssk = unsafe { [mem::zeroed(); MAX_KEY + 1] };
     let mut keys_len = 0;
