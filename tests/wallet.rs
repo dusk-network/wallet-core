@@ -6,6 +6,7 @@
 
 //! Wallet library tests.
 
+use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
 use dusk_jubjub::JubJubScalar;
 use dusk_wallet_core::{
@@ -13,7 +14,9 @@ use dusk_wallet_core::{
     types::{self, CrossoverType as WasmCrossover},
     utils, MAX_KEY, MAX_LEN, RNG_SEED,
 };
-use phoenix_core::{Crossover, PublicKey, ViewKey};
+use phoenix_core::{
+    transaction::TreeLeaf, Crossover, Note, PublicKey, ViewKey,
+};
 use rusk_abi::ContractId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -250,6 +253,63 @@ fn nullifiers_works() {
     assert_eq!(nullifiers, response);
 }
 
+#[test]
+fn ownership_check() {
+    let seed = [0xfa; RNG_SEED];
+
+    let (notes, _): (Vec<_>, Vec<_>) =
+        node::raw_notes_and_nulifiers(&seed, [10, 250, 15, 39, 55])
+            .into_iter()
+            .unzip();
+
+    let mut wallet = Wallet::default();
+
+    let mut leaves = Vec::new();
+
+    for note in notes.iter() {
+        let mut note_cloned = note.clone();
+        note_cloned.set_pos(30);
+
+        let leaf = TreeLeaf {
+            block_height: u64::MAX,
+            note: note_cloned,
+        };
+
+        leaves.extend(
+            rkyv::to_bytes::<TreeLeaf, MAX_LEN>(&leaf).unwrap().to_vec(),
+        );
+    }
+
+    let mut arg = Vec::from(seed);
+    arg.extend(leaves);
+
+    let response = wallet.call_raw("check_note_ownership", &arg).take_memory();
+
+    let mut chunks = response.chunks_exact(88 + 32 + 632);
+
+    // check if serialization is correct
+    let mut i = 0;
+    for chunk in chunks.by_ref() {
+        let block_height = u64::from_be_bytes(chunk[..8].try_into().unwrap());
+
+        let psk = String::from_utf8(chunk[8..96].to_vec()).unwrap();
+        let _ = rkyv::from_bytes::<BlsScalar>(&chunk[96..128]).unwrap();
+        let _ = rkyv::from_bytes::<Note>(&chunk[128..]).unwrap();
+
+        assert_eq!(block_height, u64::MAX);
+        assert_eq!(psk, String::from("3PD3wMMNyPxhfQh5N4pJ7tQRXvVQpiRQ5b53ny9eB3CCVFT8uAGfZgEsyoGwP4jDTXJqXKmBFCt1sDDCJzeQdQzD"));
+        i = i + 1;
+    }
+
+    assert_eq!(i, 5);
+
+    let remainder = chunks.remainder();
+
+    let last_pos = u64::from_be_bytes(remainder.try_into().unwrap());
+
+    assert_eq!(last_pos, 30);
+}
+
 /// A node interface. It will encapsulate all the phoenix core functionality.
 mod node {
     use core::mem;
@@ -295,6 +355,10 @@ mod node {
         let openings: Vec<_> = (0..len)
             .zip(notes.clone())
             .map(|(_, note)| {
+                // SAFETY: this is highly unsafe to use,
+                // but for tests its fine, `opening` is uninitialized
+                // into a type of `tx::Opening` which is UB To make it safe,
+                //  some other code should fill the bytes and initialize it
                 let opening = unsafe { mem::zeroed::<tx::Opening>() };
                 (opening, *note.pos())
             })
@@ -425,7 +489,14 @@ impl Wallet {
     where
         T: Serialize,
     {
-        let bytes = serde_json::to_string(&args).unwrap();
+        let json = serde_json::to_string(&args).unwrap();
+        let bytes = json.as_bytes();
+
+        self.call_raw(f, bytes)
+    }
+
+    pub fn call_raw(&mut self, f: &str, args: &[u8]) -> CallResult {
+        let bytes = args;
 
         let len_params = [Val::I32(bytes.len() as i32)];
         let mut ptr_results = [Val::I32(0)];
@@ -442,11 +513,7 @@ impl Wallet {
         self.instance
             .get_memory(&mut self.store, "memory")
             .expect("There should be one memory")
-            .write(
-                &mut self.store,
-                ptr_results[0].unwrap_i32() as usize,
-                bytes.as_bytes(),
-            )
+            .write(&mut self.store, ptr_results[0].unwrap_i32() as usize, bytes)
             .expect("Writing to memory should succeed");
 
         let params = [ptr_results[0].clone(), len_params[0].clone()];
