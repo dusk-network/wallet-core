@@ -4,7 +4,7 @@
 //
 // Copyright (c) DUSK NETWORK. All rights reserved.
 
-use core::mem::size_of;
+use core::{array, cmp, mem::size_of};
 
 use dusk_bls12_381::BlsScalar;
 use dusk_bytes::Serializable;
@@ -13,9 +13,9 @@ use phoenix_core::{
     Note, PublicKey, SecretKey, ViewKey,
 };
 
-use alloc::{string::ToString, vec::Vec};
+use alloc::vec::Vec;
 
-use crate::alloc::borrow::ToOwned;
+use crate::utils::compose;
 use crate::{
     key::{self},
     types::{self},
@@ -27,6 +27,10 @@ const TREE_LEAF_SIZE: usize = size_of::<ArchivedTreeLeaf>();
 
 /// Returns true or false if the note is owned by the index
 /// if its true then nullifier of that note if sent with it
+///
+/// Return buffer: [block_height: (u64 big endian bytes), key: (string
+/// bytes), nullifier: (rkyv serialized bytes), note: (rkyv serialized
+/// bytes)...lastPosition: (u64 big endian bytes)]
 #[no_mangle]
 pub fn check_note_ownership(args: i32, len: i32) -> i64 {
     // SAFETY: We assume the caller has passed a valid pointer and len as the
@@ -43,14 +47,12 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
     let mut leaf_chunk = leaves.chunks_exact(TREE_LEAF_SIZE);
     let mut last_pos = 0;
 
-    let mut notes = Vec::new();
-    let mut nullifiers = Vec::new();
-    let mut block_heights = Vec::new();
-    let mut public_spend_keys = Vec::new();
+    let mut buffer = Vec::new();
+
     let view_keys: [ViewKey; MAX_KEY] =
         core::array::from_fn(|i| key::derive_vk(&seed, i as _));
     let secret_keys: [SecretKey; MAX_KEY] =
-        core::array::from_fn(|i| key::derive_sk(&seed, i as _));
+        array::from_fn(|i| key::derive_sk(&seed, i as _));
 
     for leaf_bytes in leaf_chunk.by_ref() {
         let TreeLeaf { block_height, note } = match rkyv::from_bytes(leaf_bytes)
@@ -61,7 +63,7 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
             }
         };
 
-        last_pos = core::cmp::max(last_pos, *note.pos());
+        last_pos = cmp::max(last_pos, *note.pos());
 
         for idx in 0..MAX_KEY {
             if view_keys[idx].owns(&note) {
@@ -84,27 +86,19 @@ pub fn check_note_ownership(args: i32, len: i32) -> i64 {
                         Err(_) => return utils::fail(),
                     };
 
-                notes.push(raw_note.to_owned());
-                block_heights.push(block_height);
-                public_spend_keys.push(psk_found);
-                nullifiers.push(nullifier_found);
+                buffer.extend_from_slice(&block_height.to_be_bytes());
+                buffer.extend_from_slice(&psk_found.as_bytes());
+                buffer.extend_from_slice(&nullifier_found);
+                buffer.extend_from_slice(&raw_note);
             }
         }
     }
 
-    let block_heights = block_heights
-        .iter()
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
+    buffer.extend_from_slice(&last_pos.to_be_bytes());
 
-    utils::into_ptr(types::CheckNoteOwnershipResponse {
-        notes,
-        block_heights,
-        public_spend_keys,
-        nullifiers,
-        last_pos,
-    })
+    let (ptr, len) = utils::allocated_copy(buffer);
+
+    compose(true, ptr, len)
 }
 
 /// Given array of notes, nullifiers of those notes and some existing
