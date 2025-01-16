@@ -1,4 +1,10 @@
-# Wallet Core
+# ⛔ [DEPRECATED] Wallet Core
+
+This repository has been archived and is no longer actively maintained.
+
+The development of Wallet Core has been moved to the [Rusk Monorepo](https://github.com/dusk-network/rusk/tree/master/wallet-core). Please refer to that repository for the latest code, updates, and contributions.
+
+---
 
 ![status](https://github.com/dusk-network/wallet-core/workflows/Dusk%20CI/badge.svg)
 [![codecov](https://codecov.io/gh/dusk-network/wallet-core/branch/main/graph/badge.svg?token=9W3J09AWZG)](https://codecov.io/gh/dusk-network/wallet-core)
